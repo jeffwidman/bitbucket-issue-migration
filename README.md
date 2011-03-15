@@ -4,6 +4,14 @@ This is a small script that will migrate bitbucket issues to a github project. I
 to pull out the issues and then scrape the screen to pull the comments out. The script will also throttle
 the amount of requests it makes per minute to avoid the 60 request per minute limit that github enforces.
 
+## Before running
+
+You will need to install the requirements first
+
+    pip install -r requirements.pip
+
+## Example
+    
     python migrate.py -h
     Usage: migrate.py [options]
     
@@ -22,7 +30,5 @@ the amount of requests it makes per minute to avoid the 60 request per minute li
       -u BITBUCKET_USERNAME, --bitbucket_username=BITBUCKET_USERNAME
                             Bitbucket username
 
-
-## Example
 
 `python migrate.py -g <githbu_user> -a <github_api_token> -d <github_repo> -s <bitbucket_repo> -u <bitbucket_usename>`
