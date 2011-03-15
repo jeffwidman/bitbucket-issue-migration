@@ -30,5 +30,4 @@ You will need to install the requirements first
       -u BITBUCKET_USERNAME, --bitbucket_username=BITBUCKET_USERNAME
                             Bitbucket username
 
-
-`python migrate.py -g <githbu_user> -a <github_api_token> -d <github_repo> -s <bitbucket_repo> -u <bitbucket_usename>`
+    python migrate.py -g <githbu_user> -a <github_api_token> -d <github_repo> -s <bitbucket_repo> -u <bitbucket_usename>
