@@ -31,3 +31,6 @@ You will need to install the requirements first
                             Bitbucket username
 
     python migrate.py -g <githbu_user> -a <github_api_token> -d <github_repo> -s <bitbucket_repo> -u <bitbucket_usename>
+
+Note: if you need to migrate to a GitHub organizational repository, use your personal username, but the appropriate 
+API token for the repository.
