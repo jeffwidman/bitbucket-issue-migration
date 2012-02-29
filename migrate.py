@@ -137,6 +137,7 @@ def increment_api_call():
 github = Github(api_token=options.github_api_token, username=options.github_username)
 start = 0
 issue_counts = 0
+issues = []
 while True:
     url = "https://api.bitbucket.org/1.0/repositories/%s/%s/issues/?start=%d" % (options.bitbucket_username, options.bitbucket_repo, start)
     response = urllib2.urlopen(url)
@@ -146,32 +147,37 @@ while True:
         break
 
     for issue in result['issues']:
-        comments = scrape_comments(issue)
-        if options.dry_run:
-            print "Title:", issue.get('title')
-            print "Body:", format_body(issue)
-            print "Comments", [comment['body'] for comment in comments]
-        else:
-            increment_api_call()
-            ni = github.issues.open(options.github_repo,
-                body=format_body(issue).encode('utf-8'),
-                title=issue.get('title').encode('utf-8'),
-            )
-
-            increment_api_call()
-            github.issues.add_label(options.github_repo, ni.number, issue['metadata']['kind'])
-
-            increment_api_call()
-            github.issues.add_label(options.github_repo, ni.number, "import")
-
-            comment_count = 0
-            for comment in comments:
-                increment_api_call()
-                github.issues.comment(options.github_repo, ni.number, format_comment(comment))
-                comment_count += 1
-
-            print "Created:", issue['title'], "With", comment_count, "comments"
-        issue_counts += 1
+        issues.append(issue)
         start += 1
+
+# Sort issues, to sync issue numbers on freshly created GitHub projects.
+# Note: not memory efficient, could use too much memory on large projects.
+for issue in sorted(issues, key=lambda issue: issue['local_id']):
+    comments = scrape_comments(issue)
+    if options.dry_run:
+        print "Title:", issue.get('title')
+        print "Body:", format_body(issue)
+        print "Comments", [comment['body'] for comment in comments]
+    else:
+        increment_api_call()
+        ni = github.issues.open(options.github_repo,
+            body=format_body(issue).encode('utf-8'),
+            title=issue.get('title').encode('utf-8'),
+        )
+
+        increment_api_call()
+        github.issues.add_label(options.github_repo, ni.number, issue['metadata']['kind'])
+
+        increment_api_call()
+        github.issues.add_label(options.github_repo, ni.number, "import")
+
+        comment_count = 0
+        for comment in comments:
+            increment_api_call()
+            github.issues.comment(options.github_repo, ni.number, format_comment(comment))
+            comment_count += 1
+
+        print "Created:", issue['title'], "With", comment_count, "comments"
+    issue_counts += 1
 
 print "Created", issue_counts, "Issues"
