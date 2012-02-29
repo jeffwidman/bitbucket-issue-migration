@@ -9,7 +9,7 @@ try:
     import json
 except ImportError:
     import simplejson as json
-    
+
 from optparse import OptionParser
 parser = OptionParser()
 
@@ -70,12 +70,12 @@ def clean_body(body):
                 before, part, after = line.partition("{{{")
                 lines.append('    ' + after)
                 in_block = True
-    
+
             if "}}}" in line:
                 before, part, after = line.partition("}}}")
                 lines.append('    ' + before)
                 in_block = False
-        else: 
+        else:
             if in_block:
                 lines.append("    " + line)
             else:
@@ -111,7 +111,7 @@ def scrape_comments(issue):
             'body' : body.encode('utf-8'),
             'number' : number
         })
-    
+
     return comments
 
 github_api_count = 0
@@ -152,7 +152,7 @@ while True:
                 body=format_body(issue).encode('utf-8'),
                 title=issue.get('title').encode('utf-8'),
             )
-            
+
             increment_api_call()
             github.issues.add_label(options.github_repo, ni.number, issue['metadata']['kind'])
 
