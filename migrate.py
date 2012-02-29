@@ -37,11 +37,16 @@ parser.add_option("-u", "--bitbucket_username", dest="bitbucket_username",
 # Formatters
 def format_name(issue):
     if 'reported_by' in issue:
+        name = "Anonymous"
         reported_by = issue['reported_by']
         if 'first_name' in reported_by and 'last_name' in reported_by:
-            return " ".join([ reported_by['first_name'],reported_by['last_name']])
+            name = " ".join([ reported_by['first_name'],reported_by['last_name']])
         elif 'username' in reported_by:
-            return reported_by['username']
+            name = reported_by['username']
+        if 'username' in reported_by:
+            return '[%s](http://bitbucket.org/%s)' % (name, reported_by['username'])
+        else:
+            return name
     else:
         return "Anonymous"
 
