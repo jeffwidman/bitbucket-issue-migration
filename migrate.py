@@ -1,6 +1,4 @@
 from github2.client import Github
-from BeautifulSoup import BeautifulSoup
-from html2text import html2text
 from datetime import datetime, timedelta
 import urllib2
 import time
@@ -35,18 +33,23 @@ parser.add_option("-u", "--bitbucket_username", dest="bitbucket_username",
 
 
 # Formatters
+
+def format_user(author_info):
+    name = "Anonymous"
+    if not author_info:
+        return name
+    if 'first_name' in author_info and 'last_name' in author_info:
+        name = " ".join([ author_info['first_name'],author_info['last_name']])
+    elif 'username' in author_info:
+        name = author_info['username']
+    if 'username' in author_info:
+        return '[%s](http://bitbucket.org/%s)' % (name, author_info['username'])
+    else:
+        return name
+
 def format_name(issue):
     if 'reported_by' in issue:
-        name = "Anonymous"
-        reported_by = issue['reported_by']
-        if 'first_name' in reported_by and 'last_name' in reported_by:
-            name = " ".join([ reported_by['first_name'],reported_by['last_name']])
-        elif 'username' in reported_by:
-            name = reported_by['username']
-        if 'username' in reported_by:
-            return '[%s](http://bitbucket.org/%s)' % (name, reported_by['username'])
-        else:
-            return name
+        return format_user(issue['reported_by'])
     else:
         return "Anonymous"
 
@@ -63,7 +66,7 @@ def format_body(issue):
 def format_comment(comment):
     return comment['body'] + """\n
 ---------------------------------------
-    Original Comment By: %s
+Original Comment By: %s
     """ % (comment['user'].encode('utf-8'))
 
 def clean_body(body):
@@ -87,34 +90,18 @@ def clean_body(body):
                 lines.append(line.replace("{{{", "`").replace("}}}", "`"))
     return "\n".join(lines)
 
-def scrape_comments(issue):
-    # This is a hack since the current BitBucket api does not support pulling comments.
-    url = "https://bitbucket.org/%s/%s/issue/%s" % (options.bitbucket_username, options.bitbucket_repo, issue['local_id'])
-    content = urllib2.urlopen(url).read()
-    bs = BeautifulSoup(content)
+def get_comments(issue):
+    url = "https://api.bitbucket.org/1.0/repositories/%s/%s/issues/%s/comments/" % (options.bitbucket_username, options.bitbucket_repo, issue['local_id'])
+    result = json.loads(urllib2.urlopen(url).read())
+
     comments = []
-    for comment in bs.findAll('li', {'class': ' comment-content'}):
-        body = comment.find('div', {'class' : 'issues-comment edit-comment'})
-        if body:
-            body = html2text(unicode(body))
-        else:
-            # This is not a comment it is a issue change
-            body = html2text(unicode(comment.find('ul', {'class' : 'issue-changes'})))
-        body = clean_body(body)
-        user = 'Anonymous'
-        try:
-            user = comment.findAll('a')[1].getText()
-        except IndexError:
-            pass
-
-        created_at = comment.find('time').get('datetime')
-        number = int(comment.find('a', {"class" : "issues-comments-permalink"}).getText().replace("#", ""))
-
+    for comment in result:
+        body = comment['content'] or ''
         comments.append({
-            'user': user,
-            'created_at' : created_at,
+            'user': format_user(comment['author_info']),
+            'created_at' : comment['utc_created_on'],
             'body' : body.encode('utf-8'),
-            'number' : number
+            'number' : comment['comment_id']
         })
 
     return comments
@@ -153,7 +140,7 @@ while True:
 # Sort issues, to sync issue numbers on freshly created GitHub projects.
 # Note: not memory efficient, could use too much memory on large projects.
 for issue in sorted(issues, key=lambda issue: issue['local_id']):
-    comments = scrape_comments(issue)
+    comments = get_comments(issue)
     if options.dry_run:
         print "Title:", issue.get('title')
         print "Body:", format_body(issue)
