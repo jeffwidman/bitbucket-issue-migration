@@ -1,7 +1,9 @@
-from github2.client import Github
+from pygithub3 import Github
 from datetime import datetime, timedelta
 import urllib2
 import time
+
+import sys
 
 try:
     import json
@@ -17,9 +19,6 @@ parser.add_option("-t", "--dry-run", action="store_true", dest="dry_run", defaul
 parser.add_option("-g", "--github-username", dest="github_username",
     help="GitHub username")
 
-parser.add_option("-a", "--github-api-token", dest="github_api_token",
-    help="GitHub api token to login with")
-
 parser.add_option("-d", "--github_repo", dest="github_repo",
     help="GitHub to add issues to. Format: <username>/<repo name>")
 
@@ -30,6 +29,13 @@ parser.add_option("-u", "--bitbucket_username", dest="bitbucket_username",
     help="Bitbucket username")
 
 (options, args) = parser.parse_args()
+
+
+bitbucket_password = raw_input('Please enter your github password: ')
+
+# Login in to github and create object
+github = Github(login=options.github_username, password=bitbucket_password)
+
 
 
 # Formatters
@@ -91,37 +97,28 @@ def clean_body(body):
     return "\n".join(lines)
 
 def get_comments(issue):
+    '''
+    Fetch the comments for an issue
+    '''
     url = "https://api.bitbucket.org/1.0/repositories/%s/%s/issues/%s/comments/" % (options.bitbucket_username, options.bitbucket_repo, issue['local_id'])
     result = json.loads(urllib2.urlopen(url).read())
 
     comments = []
     for comment in result:
         body = comment['content'] or ''
-        comments.append({
-            'user': format_user(comment['author_info']),
-            'created_at' : comment['utc_created_on'],
-            'body' : body.encode('utf-8'),
-            'number' : comment['comment_id']
-        })
+
+        # Status comments (assigned, version, etc. changes) have in bitbucket no body
+        if body:
+            comments.append({
+                'user': format_user(comment['author_info']),
+                'created_at': comment['utc_created_on'],
+                'body': body.encode('utf-8'),
+                'number': comment['comment_id']
+            })
 
     return comments
 
-github_api_count = 0
-start_date = datetime.now()
-def increment_api_call():
-    global github_api_count
-    github_api_count += 1
 
-    if github_api_count > 40:
-       global start_date
-       sleep_time = ((start_date + timedelta(minutes=1)) - datetime.now()).seconds + 5
-       print "Waiting for", sleep_time
-       time.sleep(sleep_time)
-       start_date = datetime.now()
-       github_api_count = 0
-
-# Login in to github and create account object
-github = Github(api_token=options.github_api_token, username=options.github_username)
 start = 0
 issue_counts = 0
 issues = []
@@ -137,34 +134,75 @@ while True:
         issues.append(issue)
         start += 1
 
+
 # Sort issues, to sync issue numbers on freshly created GitHub projects.
 # Note: not memory efficient, could use too much memory on large projects.
 for issue in sorted(issues, key=lambda issue: issue['local_id']):
     comments = get_comments(issue)
+    
+
     if options.dry_run:
-        print "Title:", issue.get('title')
-        print "Body:", format_body(issue)
+        print "Title: {0}".format(issue.get('title'))
+        print "Body: {0}".format(format_body(issue))
         print "Comments", [comment['body'] for comment in comments]
     else:
-        increment_api_call()
-        ni = github.issues.open(options.github_repo,
-            body=format_body(issue).encode('utf-8'),
-            title=issue.get('title').encode('utf-8'),
-        )
+        # Create the isssue
+        issue_data = {'title': issue.get('title').encode('utf-8'),
+                      'body': format_body(issue).encode('utf-8')}
+        ni = github.issues.create(issue_data,
+                                  options.github_username,
+                                  options.github_repo)
+        
+        # Set the status and labels
+        if issue.get('status') == 'resolved':
+            github.issues.update(ni.number,
+                                 {'state': 'closed'},
+                                 user=options.github_username,
+                                 repo=options.github_repo)
 
-        increment_api_call()
-        github.issues.add_label(options.github_repo, ni.number, issue['metadata']['kind'])
-
-        increment_api_call()
-        github.issues.add_label(options.github_repo, ni.number, "import")
-
+        # Everything else is done with labels in github
+        # TODO: there seems to be a problem with the add_to_issue method of
+        #       pygithub3, so it's not possible to assign labels to issues
+        
+        elif issue.get('status') == 'wontfix':
+            pass
+        elif issue.get('status') == 'on hold':
+            pass
+        elif issue.get('status') == 'invalid':
+            pass
+        elif issue.get('status') == 'duplicate':
+            pass
+        elif issue.get('status') == 'wontfix':
+            pass
+        
+        #github.issues.labels.add_to_issue(ni.number,
+        #                                  issue['metadata']['kind'], 
+        #                                  user=options.github_username,
+        #                                  repo=options.github_repo,
+        #                                  )
+        #sys.exit()
+        
+        #github.issues.labels.add_to_issue(ni.number,
+        #                                  options.github_username,
+        #                                  options.github_repo,
+        #                                  ('import',))
+        
+        # Milestones
+        
+        
+        
+        # Add the comments
         comment_count = 0
         for comment in comments:
-            increment_api_call()
-            github.issues.comment(options.github_repo, ni.number, format_comment(comment))
+            github.issues.comments.create(ni.number,
+                                        format_comment(comment),
+                                        options.github_username,
+                                        options.github_repo)
             comment_count += 1
 
-        print "Created:", issue['title'], "With", comment_count, "comments"
+        print "Created: {0} with {1} comments".format(issue['title'], comment_count)
     issue_counts += 1
 
-print "Created", issue_counts, "Issues"
+print "Created {0} issues".format(issue_counts)
+
+sys.exit()
