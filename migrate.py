@@ -43,6 +43,9 @@ parser.add_option("-s", "--bitbucket_repo", dest="bitbucket_repo",
 
 parser.add_option("-u", "--bitbucket_username", dest="bitbucket_username",
     help="Bitbucket username")
+    
+parser.add_option("-f", "--start", type="int", dest="start",
+    help="Bitbucket id of the issue to start import")    
 
 (options, args) = parser.parse_args()
 
@@ -134,12 +137,10 @@ def get_comments(issue):
 
     return comments
 
-
-start = 0
 issue_counts = 0
 issues = []
 while True:
-    url = "https://api.bitbucket.org/1.0/repositories/%s/%s/issues/?start=%d" % (options.bitbucket_username, options.bitbucket_repo, start)
+    url = "https://api.bitbucket.org/1.0/repositories/%s/%s/issues/?start=%d" % (options.bitbucket_username, options.bitbucket_repo, options.start-1) #-1 because the start option is id-1
     response = urllib2.urlopen(url)
     result = json.loads(response.read())
     if not result['issues']:
@@ -148,7 +149,7 @@ while True:
 
     for issue in result['issues']:
         issues.append(issue)
-        start += 1
+        options.start += 1
 
 
 # Sort issues, to sync issue numbers on freshly created GitHub projects.
