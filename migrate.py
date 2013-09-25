@@ -216,7 +216,7 @@ for issue in sorted(issues, key=lambda issue: issue['local_id']):
                                         options.github_repo)
             comment_count += 1
 
-        print "Created: {0} with {1} comments".format(issue['title'], comment_count)
+        print u"Created: {0} with {1} comments".format(issue['title'], comment_count)
     issue_counts += 1
 
 print "Created {0} issues".format(issue_counts)
