@@ -29,8 +29,10 @@ You will need to install the requirements first
                             Bitbucket repo to pull data from.
       -u BITBUCKET_USERNAME, --bitbucket_username=BITBUCKET_USERNAME
                             Bitbucket username
+      -f START, --start=START
+                            Bitbucket id of the issue to start import (0 means you want all the issues)                       
 
-    python migrate.py -g <githbu_user> -d <github_repo> -s <bitbucket_repo> -u <bitbucket_usename>
+    python migrate.py -g <githbu_user> -d <github_repo> -s <bitbucket_repo> -u <bitbucket_usename> -f 0
 
 Note: if you need to migrate to a GitHub organizational repository, use your personal username,
 but the appropriate API token for the repository.
