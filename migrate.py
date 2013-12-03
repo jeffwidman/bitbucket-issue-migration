@@ -18,6 +18,7 @@ from pygithub3 import Github
 from datetime import datetime, timedelta
 import urllib2
 import time
+import getpass
 
 import sys
 
@@ -49,8 +50,8 @@ parser.add_option("-f", "--start", type="int", dest="start",
 
 (options, args) = parser.parse_args()
 
-
-github_password = raw_input('Please enter your github password: ')
+print 'Please enter your github password'
+github_password = getpass.getpass()
 
 # Login in to github and create object
 github = Github(login=options.github_username, password=github_password)
@@ -159,8 +160,8 @@ for issue in sorted(issues, key=lambda issue: issue['local_id']):
 
 
     if options.dry_run:
-        print "Title: {0}".format(issue.get('title'))
-        print "Body: {0}".format(format_body(issue))
+        print "Title: {0}".format(issue.get('title').encode('utf-8'))
+        print "Body: {0}".format(format_body(issue).encode('utf-8'))
         print "Comments", [comment['body'] for comment in comments]
     else:
         # Create the isssue
