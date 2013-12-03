@@ -1,15 +1,15 @@
 # This file is part of the bitbucket issue migration script.
-# 
+#
 # The script is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
-# 
+#
 # The script is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
-# 
+#
 # You should have received a copy of the GNU General Public License
 # along with the bitbucket issue migration script.
 # If not, see <http://www.gnu.org/licenses/>.
@@ -50,10 +50,10 @@ parser.add_option("-f", "--start", type="int", dest="start",
 (options, args) = parser.parse_args()
 
 
-bitbucket_password = raw_input('Please enter your github password: ')
+github_password = raw_input('Please enter your github password: ')
 
 # Login in to github and create object
-github = Github(login=options.github_username, password=bitbucket_password)
+github = Github(login=options.github_username, password=github_password)
 
 
 
@@ -156,7 +156,7 @@ while True:
 # Note: not memory efficient, could use too much memory on large projects.
 for issue in sorted(issues, key=lambda issue: issue['local_id']):
     comments = get_comments(issue)
-    
+
 
     if options.dry_run:
         print "Title: {0}".format(issue.get('title'))
@@ -166,21 +166,19 @@ for issue in sorted(issues, key=lambda issue: issue['local_id']):
         # Create the isssue
         issue_data = {'title': issue.get('title').encode('utf-8'),
                       'body': format_body(issue).encode('utf-8')}
-        ni = github.issues.create(issue_data,
-                                  options.github_username,
-                                  options.github_repo)
-        
+        ni = github.issues.create(issue_data, options.github_repo.split('/')[0], options.github_repo.split('/')[1] )
+
         # Set the status and labels
         if issue.get('status') == 'resolved':
             github.issues.update(ni.number,
                                  {'state': 'closed'},
-                                 user=options.github_username,
-                                 repo=options.github_repo)
+                                 user=options.github_repo.split('/')[0],
+                                 repo=options.github_repo.split('/')[1])
 
         # Everything else is done with labels in github
         # TODO: there seems to be a problem with the add_to_issue method of
         #       pygithub3, so it's not possible to assign labels to issues
-        
+
         elif issue.get('status') == 'wontfix':
             pass
         elif issue.get('status') == 'on hold':
@@ -191,30 +189,30 @@ for issue in sorted(issues, key=lambda issue: issue['local_id']):
             pass
         elif issue.get('status') == 'wontfix':
             pass
-        
+
         #github.issues.labels.add_to_issue(ni.number,
-        #                                  issue['metadata']['kind'], 
+        #                                  issue['metadata']['kind'],
         #                                  user=options.github_username,
         #                                  repo=options.github_repo,
         #                                  )
         #sys.exit()
-        
+
         #github.issues.labels.add_to_issue(ni.number,
         #                                  options.github_username,
         #                                  options.github_repo,
         #                                  ('import',))
-        
+
         # Milestones
-        
-        
-        
+
+
+
         # Add the comments
         comment_count = 0
         for comment in comments:
             github.issues.comments.create(ni.number,
                                         format_comment(comment),
-                                        options.github_username,
-                                        options.github_repo)
+                                        options.github_repo.split('/')[0],
+                                        options.github_repo.split('/')[1])
             comment_count += 1
 
         print u"Created: {0} with {1} comments".format(issue['title'], comment_count)
