@@ -1,15 +1,15 @@
 # This file is part of the bitbucket issue migration script.
-# 
+#
 # The script is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
-# 
+#
 # The script is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
-# 
+#
 # You should have received a copy of the GNU General Public License
 # along with the bitbucket issue migration script.
 # If not, see <http://www.gnu.org/licenses/>.
@@ -18,6 +18,7 @@ from pygithub3 import Github
 from datetime import datetime, timedelta
 import urllib2
 import time
+import getpass
 
 import sys
 
@@ -43,14 +44,17 @@ parser.add_option("-s", "--bitbucket_repo", dest="bitbucket_repo",
 
 parser.add_option("-u", "--bitbucket_username", dest="bitbucket_username",
     help="Bitbucket username")
+    
+parser.add_option("-f", "--start", type="int", dest="start",
+    help="Bitbucket id of the issue to start import")    
 
 (options, args) = parser.parse_args()
 
-
-bitbucket_password = raw_input('Please enter your github password: ')
+print 'Please enter your github password'
+github_password = getpass.getpass()
 
 # Login in to github and create object
-github = Github(login=options.github_username, password=bitbucket_password)
+github = Github(login=options.github_username, password=github_password)
 
 
 
@@ -134,12 +138,10 @@ def get_comments(issue):
 
     return comments
 
-
-start = 0
 issue_counts = 0
 issues = []
 while True:
-    url = "https://api.bitbucket.org/1.0/repositories/%s/%s/issues/?start=%d" % (options.bitbucket_username, options.bitbucket_repo, start)
+    url = "https://api.bitbucket.org/1.0/repositories/%s/%s/issues/?start=%d" % (options.bitbucket_username, options.bitbucket_repo, options.start-1) #-1 because the start option is id-1
     response = urllib2.urlopen(url)
     result = json.loads(response.read())
     if not result['issues']:
@@ -148,38 +150,36 @@ while True:
 
     for issue in result['issues']:
         issues.append(issue)
-        start += 1
+        options.start += 1
 
 
 # Sort issues, to sync issue numbers on freshly created GitHub projects.
 # Note: not memory efficient, could use too much memory on large projects.
 for issue in sorted(issues, key=lambda issue: issue['local_id']):
     comments = get_comments(issue)
-    
+
 
     if options.dry_run:
-        print "Title: {0}".format(issue.get('title'))
-        print "Body: {0}".format(format_body(issue))
+        print "Title: {0}".format(issue.get('title').encode('utf-8'))
+        print "Body: {0}".format(format_body(issue).encode('utf-8'))
         print "Comments", [comment['body'] for comment in comments]
     else:
         # Create the isssue
         issue_data = {'title': issue.get('title').encode('utf-8'),
                       'body': format_body(issue).encode('utf-8')}
-        ni = github.issues.create(issue_data,
-                                  options.github_username,
-                                  options.github_repo)
-        
+        ni = github.issues.create(issue_data, options.github_repo.split('/')[0], options.github_repo.split('/')[1] )
+
         # Set the status and labels
         if issue.get('status') == 'resolved':
             github.issues.update(ni.number,
                                  {'state': 'closed'},
-                                 user=options.github_username,
-                                 repo=options.github_repo)
+                                 user=options.github_repo.split('/')[0],
+                                 repo=options.github_repo.split('/')[1])
 
         # Everything else is done with labels in github
         # TODO: there seems to be a problem with the add_to_issue method of
         #       pygithub3, so it's not possible to assign labels to issues
-        
+
         elif issue.get('status') == 'wontfix':
             pass
         elif issue.get('status') == 'on hold':
@@ -190,33 +190,33 @@ for issue in sorted(issues, key=lambda issue: issue['local_id']):
             pass
         elif issue.get('status') == 'wontfix':
             pass
-        
+
         #github.issues.labels.add_to_issue(ni.number,
-        #                                  issue['metadata']['kind'], 
+        #                                  issue['metadata']['kind'],
         #                                  user=options.github_username,
         #                                  repo=options.github_repo,
         #                                  )
         #sys.exit()
-        
+
         #github.issues.labels.add_to_issue(ni.number,
         #                                  options.github_username,
         #                                  options.github_repo,
         #                                  ('import',))
-        
+
         # Milestones
-        
-        
-        
+
+
+
         # Add the comments
         comment_count = 0
         for comment in comments:
             github.issues.comments.create(ni.number,
                                         format_comment(comment),
-                                        options.github_username,
-                                        options.github_repo)
+                                        options.github_repo.split('/')[0],
+                                        options.github_repo.split('/')[1])
             comment_count += 1
 
-        print "Created: {0} with {1} comments".format(issue['title'], comment_count)
+        print u"Created: {0} with {1} comments".format(issue['title'], comment_count)
     issue_counts += 1
 
 print "Created {0} issues".format(issue_counts)
