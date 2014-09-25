@@ -149,7 +149,7 @@ def get_issues(bb_url, start_id):
     while True:
         url = "{}/?start={}".format(
             bb_url,
-            start_id - 1   # -1 because the start option is id-1
+            start_id
         )
 
         try:
