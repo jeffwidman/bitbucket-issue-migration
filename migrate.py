@@ -76,8 +76,8 @@ def format_user(author_info):
         return " ".join([author_info['first_name'], author_info['last_name']])
 
     if 'username' in author_info:
-        return '[{}](http://bitbucket.org/{})'.format(
-            name, author_info['username']
+        return '[{0}](http://bitbucket.org/{0})'.format(
+            author_info['username']
         )
 
 
@@ -267,13 +267,13 @@ if __name__ == "__main__":
         options.bitbucket_repo
     )
 
-    github_password = getpass.getpass("Please enter your GitHub password\n")
+    # fetch issues from BitBucket
+    issues = get_issues(bb_url, options.start)
 
-    # Login in to github and create object
+    # push them in GitHub (issues comments are fetched here)
+    github_password = getpass.getpass("Please enter your GitHub password\n")
     github = Github(login=options.github_username, password=github_password)
     gh_username, gh_repository = options.github_repo.split('/')
-
-    issues = get_issues(bb_url, options.start)
 
     # Sort issues, to sync issue numbers on freshly created GitHub projects.
     # Note: not memory efficient, could use too much memory on large projects.
@@ -281,8 +281,8 @@ if __name__ == "__main__":
         comments = get_comments(bb_url, issue)
 
         if options.dry_run:
-            print "Title: {0}".format(issue.get('title').encode('utf-8'))
-            print "Body: {0}".format(
+            print "Title: {}".format(issue.get('title').encode('utf-8'))
+            print "Body: {}".format(
                 format_body(options, issue).encode('utf-8')
             )
             print "Comments", [comment['body'] for comment in comments]
