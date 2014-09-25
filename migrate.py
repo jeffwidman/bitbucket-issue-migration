@@ -41,7 +41,9 @@ def format_user(author_info):
     elif 'username' in author_info:
         name = author_info['username']
     if 'username' in author_info:
-        return '[%s](http://bitbucket.org/%s)' % (name, author_info['username'])
+        return '[{}](http://bitbucket.org/{})'.format(
+            name, author_info['username']
+        )
     else:
         return name
 
@@ -53,19 +55,23 @@ def format_name(issue):
 
 def format_body(issue):
     content = clean_body(issue.get('content'))
-    url = "https://bitbucket.org/%s/%s/issue/%s" % (options.bitbucket_username, options.bitbucket_repo, issue['local_id'])
+    url = "https://bitbucket.org/{}/{}/issue/{}".format(
+        options.bitbucket_username, options.bitbucket_repo, issue['local_id']
+    )
     return content + """\n
 ---------------------------------------
-- Bitbucket: %s
-- Originally Reported By: %s
-- Originally Created At: %s
-""" % (url, format_name(issue), issue['created_on'])
+- Bitbucket: {}
+- Originally Reported By: {}
+- Originally Created At: {}
+""".format(url, format_name(issue), issue['created_on'])
+
 
 def format_comment(comment):
     return comment['body'] + """\n
 ---------------------------------------
-Original Comment By: %s
-    """ % (comment['user'].encode('utf-8'))
+Original Comment By: {}
+    """.format(comment['user'].encode('utf-8'))
+
 
 def clean_body(body):
     lines = []
@@ -92,7 +98,9 @@ def get_comments(issue):
     '''
     Fetch the comments for an issue
     '''
-    url = "https://api.bitbucket.org/1.0/repositories/%s/%s/issues/%s/comments/" % (options.bitbucket_username, options.bitbucket_repo, issue['local_id'])
+    url = "https://api.bitbucket.org/1.0/repositories/{}/{}/issues/{}/comments/".format(
+        options.bitbucket_username, options.bitbucket_repo, issue['local_id']
+    )
     result = json.loads(urllib2.urlopen(url).read())
 
     comments = []
