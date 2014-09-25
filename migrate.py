@@ -190,14 +190,14 @@ if __name__ == "__main__":
                 .format(url=url, ex=ex)
             )
             raise
-        result = json.loads(response.read())
-        if not result['issues']:
-            # Check to see if there is issues to process if not break out.
-            break
+        else:
+            result = json.loads(response.read())
+            if not result['issues']:
+                # Check to see if there is issues to process if not break out.
+                break
 
-        for issue in result['issues']:
-            issues.append(issue)
-            options.start += 1
+            issues += result['issues']
+            options.start += len(result['issues'])
 
     # Sort issues, to sync issue numbers on freshly created GitHub projects.
     # Note: not memory efficient, could use too much memory on large projects.
