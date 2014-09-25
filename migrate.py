@@ -29,6 +29,8 @@ try:
 except ImportError:
     import simplejson as json
 
+BBURL = "https://api.bitbucket.org/1.0"
+
 
 # Formatters
 def format_user(author_info):
@@ -100,8 +102,11 @@ def get_comments(issue):
     '''
     Fetch the comments for an issue
     '''
-    url = "https://api.bitbucket.org/1.0/repositories/{}/{}/issues/{}/comments/".format(
-        options.bitbucket_username, options.bitbucket_repo, issue['local_id']
+    url = "{}/repositories/{}/{}/issues/{}/comments/".format(
+        BBURL,
+        options.bitbucket_username,
+        options.bitbucket_repo,
+        issue['local_id']
     )
     result = json.loads(urllib2.urlopen(url).read())
 
@@ -165,7 +170,8 @@ if __name__ == "__main__":
     issue_counts = 0
     issues = []
     while True:
-        url = "https://api.bitbucket.org/1.0/repositories/{}/{}/issues/?start={}".format(
+        url = "{}/repositories/{}/{}/issues/?start={}".format(
+            BBURL,
             options.bitbucket_username,
             options.bitbucket_repo,
             options.start - 1   # -1 because the start option is id-1
