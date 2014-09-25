@@ -194,6 +194,72 @@ def get_comments(bb_url, issue):
     return comments
 
 
+# GitHub push
+def push_issue(gh_username, gh_repository, issue, body, comments):
+    # Create the issue
+    issue_data = {
+        'title': issue.get('title').encode('utf-8'),
+        'body': body
+    }
+    new_issue = github.issues.create(
+        issue_data,
+        gh_username,
+        gh_repository
+    )
+
+    # Set the status and labels
+    if issue.get('status') == 'resolved':
+        github.issues.update(
+            new_issue.number,
+            {'state': 'closed'},
+            user=gh_username,
+            repo=gh_repository
+        )
+
+    # Everything else is done with labels in github
+    # TODO: there seems to be a problem with the add_to_issue method of
+    #       pygithub3, so it's not possible to assign labels to issues
+    elif issue.get('status') == 'wontfix':
+        pass
+    elif issue.get('status') == 'on hold':
+        pass
+    elif issue.get('status') == 'invalid':
+        pass
+    elif issue.get('status') == 'duplicate':
+        pass
+    elif issue.get('status') == 'wontfix':
+        pass
+
+    # github.issues.labels.add_to_issue(
+    #     new_issue.number,
+    #     issue['metadata']['kind'],
+    #     user=gh_username,
+    #     repo=gh_repository
+    # )
+
+    # github.issues.labels.add_to_issue(
+    #     new_issue.number,
+    #     gh_username,
+    #     gh_repository,
+    #     ('import',)
+    # )
+
+    # Milestones
+
+    # Add the comments
+    for comment in comments:
+        github.issues.comments.create(
+            new_issue.number,
+            format_comment(comment),
+            gh_username,
+            gh_repository
+        )
+
+    print u"Created: {} with {} comments".format(
+        issue['title'], len(comments)
+    )
+
+
 if __name__ == "__main__":
     options, args = read_arguments()
     bb_url = "https://api.bitbucket.org/1.0/repositories/{}/{}/issues".format(
@@ -205,6 +271,7 @@ if __name__ == "__main__":
 
     # Login in to github and create object
     github = Github(login=options.github_username, password=github_password)
+    gh_username, gh_repository = options.github_repo.split('/')
 
     issues = get_issues(bb_url, options.start)
 
@@ -220,63 +287,7 @@ if __name__ == "__main__":
             )
             print "Comments", [comment['body'] for comment in comments]
         else:
-            # Create the issue
-            issue_data = {'title': issue.get('title').encode('utf-8'),
-                          'body': format_body(options, issue).encode('utf-8')}
-            ni = github.issues.create(
-                issue_data,
-                options.github_repo.split('/')[0],
-                options.github_repo.split('/')[1]
-            )
+            body = format_body(options, issue).encode('utf-8')
+            push_issue(gh_username, gh_repository, issue, body, comments)
 
-            # Set the status and labels
-            if issue.get('status') == 'resolved':
-                github.issues.update(ni.number,
-                                     {'state': 'closed'},
-                                     user=options.github_repo.split('/')[0],
-                                     repo=options.github_repo.split('/')[1])
-
-            # Everything else is done with labels in github
-            # TODO: there seems to be a problem with the add_to_issue method of
-            #       pygithub3, so it's not possible to assign labels to issues
-
-            elif issue.get('status') == 'wontfix':
-                pass
-            elif issue.get('status') == 'on hold':
-                pass
-            elif issue.get('status') == 'invalid':
-                pass
-            elif issue.get('status') == 'duplicate':
-                pass
-            elif issue.get('status') == 'wontfix':
-                pass
-
-            #github.issues.labels.add_to_issue(ni.number,
-            #                                  issue['metadata']['kind'],
-            #                                  user=options.github_username,
-            #                                  repo=options.github_repo,
-            #                                  )
-            #sys.exit()
-
-            #github.issues.labels.add_to_issue(ni.number,
-            #                                  options.github_username,
-            #                                  options.github_repo,
-            #                                  ('import',))
-
-            # Milestones
-
-            # Add the comments
-            comment_count = 0
-            for comment in comments:
-                github.issues.comments.create(
-                    ni.number,
-                    format_comment(comment),
-                    options.github_repo.split('/')[0],
-                    options.github_repo.split('/')[1]
-                )
-                comment_count += 1
-
-            print u"Created: {0} with {1} comments".format(issue['title'], comment_count)
-        issue_counts += 1
-
-    print "Created {0} issues".format(issue_counts)
+    print "Created {} issues".format(len(issues))
