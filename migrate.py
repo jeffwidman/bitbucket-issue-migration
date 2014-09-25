@@ -265,7 +265,7 @@ def push_issue(gh_username, gh_repository, issue, body, comments):
             gh_repository
         )
 
-    print u"Created: {} with {} comments".format(
+    print u"Created: {} [{} comments]".format(
         issue['title'], len(comments)
     )
 
@@ -299,5 +299,4 @@ if __name__ == "__main__":
         else:
             body = format_body(options, issue).encode('utf-8')
             push_issue(gh_username, gh_repository, issue, body, comments)
-
-    print "Created {} issues".format(len(issues))
+            print "Created {} issues".format(len(issues))
