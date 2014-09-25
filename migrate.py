@@ -29,8 +29,6 @@ try:
 except ImportError:
     import simplejson as json
 
-BBURL = "https://api.bitbucket.org/1.0"
-
 
 def read_arguments():
     parser = OptionParser()
@@ -135,6 +133,39 @@ def clean_body(body):
     return "\n".join(lines)
 
 
+def get_issues(bb_url, start_id):
+    '''
+    Fetch the issues from BitBucket
+    '''
+    issues = []
+
+    while True:
+        url = "{}/?start={}".format(
+            bb_url
+            start_id - 1   # -1 because the start option is id-1
+        )
+
+        try:
+            response = urllib2.urlopen(url)
+        except urllib2.HTTPError as ex:
+            ex.message = (
+                'Problem trying to connect to bitbucket ({url}): {ex} '
+                'Hint: the bitbucket repository name is case-sensitive.'
+                .format(url=url, ex=ex)
+            )
+            raise
+        else:
+            result = json.loads(response.read())
+            if not result['issues']:
+                # Check to see if there is issues to process if not break out.
+                break
+
+            issues += result['issues']
+            start_id += len(result['issues'])
+
+    return issues
+
+
 def get_comments(issue):
     '''
     Fetch the comments for an issue
@@ -166,38 +197,17 @@ def get_comments(issue):
 
 if __name__ == "__main__":
     options, args = read_arguments()
+    bb_url = "https://api.bitbucket.org/1.0/repositories/{}/{}/issues".format(
+        options.bitbucket_username,
+        options.bitbucket_repo
+    )
+
     github_password = getpass.getpass("Please enter your GitHub password\n")
 
     # Login in to github and create object
     github = Github(login=options.github_username, password=github_password)
 
-    issue_counts = 0
-    issues = []
-    while True:
-        url = "{}/repositories/{}/{}/issues/?start={}".format(
-            BBURL,
-            options.bitbucket_username,
-            options.bitbucket_repo,
-            options.start - 1   # -1 because the start option is id-1
-        )
-
-        try:
-            response = urllib2.urlopen(url)
-        except urllib2.HTTPError as ex:
-            ex.message = (
-                'Problem trying to connect to bitbucket ({url}): {ex} '
-                'Hint: the bitbucket repository name is case-sensitive.'
-                .format(url=url, ex=ex)
-            )
-            raise
-        else:
-            result = json.loads(response.read())
-            if not result['issues']:
-                # Check to see if there is issues to process if not break out.
-                break
-
-            issues += result['issues']
-            options.start += len(result['issues'])
+    issues = get_issues(bb_url, options.start)
 
     # Sort issues, to sync issue numbers on freshly created GitHub projects.
     # Note: not memory efficient, could use too much memory on large projects.
