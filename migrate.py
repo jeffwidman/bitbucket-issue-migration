@@ -188,9 +188,10 @@ def get_comments(bb_url, issue):
         issue['local_id']
     )
     result = json.loads(urllib2.urlopen(url).read())
+    ordered = sorted(result, key=lambda comment: comment["utc_created_on"])
 
     comments = []
-    for comment in result:
+    for comment in ordered:
         body = comment['content'] or ''
 
         # Status comments (assigned, version, etc. changes) have in bitbucket
