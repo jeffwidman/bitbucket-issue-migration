@@ -69,19 +69,16 @@ def read_arguments():
 
 # Formatters
 def format_user(author_info):
-    name = "Anonymous"
     if not author_info:
-        return name
+        return "Anonymous"
+
     if 'first_name' in author_info and 'last_name' in author_info:
-        name = " ".join([author_info['first_name'], author_info['last_name']])
-    elif 'username' in author_info:
-        name = author_info['username']
+        return " ".join([author_info['first_name'], author_info['last_name']])
+
     if 'username' in author_info:
         return '[{}](http://bitbucket.org/{})'.format(
             name, author_info['username']
         )
-    else:
-        return name
 
 
 def format_name(issue):
