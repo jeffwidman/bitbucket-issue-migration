@@ -98,7 +98,7 @@ def format_body(options, issue):
 """.format(
         content,
         '-' * 40,
-        options.bitbucket_username, options.bitbucket_repo, issue['local_id']
+        options.bitbucket_username, options.bitbucket_repo, issue['local_id'],
         format_name(issue),
         issue['created_on']
     )
@@ -142,7 +142,7 @@ def get_issues(bb_url, start_id):
 
     while True:
         url = "{}/?start={}".format(
-            bb_url
+            bb_url,
             start_id - 1   # -1 because the start option is id-1
         )
 
