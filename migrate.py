@@ -133,17 +133,12 @@ if __name__ == "__main__":
     parser.add_option(
         "-t", "--dry-run",
         action="store_true", dest="dry_run", default=False,
-        help="Preform a dry run and print eveything."
+        help="Perform a dry run and print eveything."
     )
 
     parser.add_option(
         "-g", "--github-username", dest="github_username",
         help="GitHub username"
-    )
-
-    parser.add_option(
-        "-d", "--github_repo", dest="github_repo",
-        help="GitHub to add issues to. Format: <username>/<repo name>"
     )
 
     parser.add_option(
@@ -157,8 +152,13 @@ if __name__ == "__main__":
     )
 
     parser.add_option(
+        "-d", "--github_repo", dest="github_repo",
+        help="GitHub to add issues to. Format: <username>/<repo name>"
+    )
+
+    parser.add_option(
         "-f", "--start", type="int", dest="start",
-        help="Bitbucket id of the issue to start import"
+        help="Bitbucket issue id from which to start import"
     )
 
     (options, args) = parser.parse_args()
