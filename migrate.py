@@ -78,7 +78,7 @@ def format_user(author_info):
     if not author_info:
         return "Anonymous"
 
-    if 'first_name' in author_info and 'last_name' in author_info:
+    if author_info['first_name'] and author_info['last_name']:
         return " ".join([author_info['first_name'], author_info['last_name']])
 
     if 'username' in author_info:
