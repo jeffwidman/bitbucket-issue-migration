@@ -130,6 +130,7 @@ def clean_body(body):
     return "\n".join(lines)
 
 
+# BitBucket fetch
 def get_issues(bb_url, start_id):
     '''
     Fetch the issues from BitBucket
@@ -163,14 +164,12 @@ def get_issues(bb_url, start_id):
     return issues
 
 
-def get_comments(issue):
+def get_comments(bb_url, issue):
     '''
-    Fetch the comments for an issue
+    Fetch the comments for a BitBucket issue
     '''
-    url = "{}/repositories/{}/{}/issues/{}/comments/".format(
-        BBURL,
-        options.bitbucket_username,
-        options.bitbucket_repo,
+    url = "{}/{}/comments/".format(
+        bb_url,
         issue['local_id']
     )
     result = json.loads(urllib2.urlopen(url).read())
@@ -209,7 +208,7 @@ if __name__ == "__main__":
     # Sort issues, to sync issue numbers on freshly created GitHub projects.
     # Note: not memory efficient, could use too much memory on large projects.
     for issue in sorted(issues, key=lambda issue: issue['local_id']):
-        comments = get_comments(issue)
+        comments = get_comments(bb_url, issue)
 
         if options.dry_run:
             print "Title: {0}".format(issue.get('title').encode('utf-8'))
