@@ -32,6 +32,43 @@ except ImportError:
 BBURL = "https://api.bitbucket.org/1.0"
 
 
+def read_arguments():
+    parser = OptionParser()
+
+    parser.add_option(
+        "-t", "--dry-run",
+        action="store_true", dest="dry_run", default=False,
+        help="Perform a dry run and print eveything."
+    )
+
+    parser.add_option(
+        "-g", "--github-username", dest="github_username",
+        help="GitHub username"
+    )
+
+    parser.add_option(
+        "-s", "--bitbucket_repo", dest="bitbucket_repo",
+        help="Bitbucket repo to pull data from."
+    )
+
+    parser.add_option(
+        "-u", "--bitbucket_username", dest="bitbucket_username",
+        help="Bitbucket username"
+    )
+
+    parser.add_option(
+        "-d", "--github_repo", dest="github_repo",
+        help="GitHub to add issues to. Format: <username>/<repo name>"
+    )
+
+    parser.add_option(
+        "-f", "--start", type="int", dest="start",
+        help="Bitbucket issue id from which to start import"
+    )
+
+    return parser.parse_args()
+
+
 # Formatters
 def format_user(author_info):
     name = "Anonymous"
@@ -128,43 +165,10 @@ def get_comments(issue):
 
 
 if __name__ == "__main__":
-    parser = OptionParser()
-
-    parser.add_option(
-        "-t", "--dry-run",
-        action="store_true", dest="dry_run", default=False,
-        help="Perform a dry run and print eveything."
-    )
-
-    parser.add_option(
-        "-g", "--github-username", dest="github_username",
-        help="GitHub username"
-    )
-
-    parser.add_option(
-        "-s", "--bitbucket_repo", dest="bitbucket_repo",
-        help="Bitbucket repo to pull data from."
-    )
-
-    parser.add_option(
-        "-u", "--bitbucket_username", dest="bitbucket_username",
-        help="Bitbucket username"
-    )
-
-    parser.add_option(
-        "-d", "--github_repo", dest="github_repo",
-        help="GitHub to add issues to. Format: <username>/<repo name>"
-    )
-
-    parser.add_option(
-        "-f", "--start", type="int", dest="start",
-        help="Bitbucket issue id from which to start import"
-    )
-
-    (options, args) = parser.parse_args()
+    options, args = read_arguments()
+    github_password = getpass.getpass("Please enter your GitHub password\n")
 
     # Login in to github and create object
-    github_password = getpass.getpass("Please enter your github password\n")
     github = Github(login=options.github_username, password=github_password)
 
     issue_counts = 0
