@@ -29,35 +29,6 @@ try:
 except ImportError:
     import simplejson as json
 
-parser = OptionParser()
-
-parser.add_option("-t", "--dry-run", action="store_true", dest="dry_run", default=False,
-    help="Preform a dry run and print eveything.")
-
-parser.add_option("-g", "--github-username", dest="github_username",
-    help="GitHub username")
-
-parser.add_option("-d", "--github_repo", dest="github_repo",
-    help="GitHub to add issues to. Format: <username>/<repo name>")
-
-parser.add_option("-s", "--bitbucket_repo", dest="bitbucket_repo",
-    help="Bitbucket repo to pull data from.")
-
-parser.add_option("-u", "--bitbucket_username", dest="bitbucket_username",
-    help="Bitbucket username")
-    
-parser.add_option("-f", "--start", type="int", dest="start",
-    help="Bitbucket id of the issue to start import")    
-
-(options, args) = parser.parse_args()
-
-print 'Please enter your github password'
-github_password = getpass.getpass()
-
-# Login in to github and create object
-github = Github(login=options.github_username, password=github_password)
-
-
 
 # Formatters
 
@@ -139,94 +110,139 @@ def get_comments(issue):
 
     return comments
 
-issue_counts = 0
-issues = []
-while True:
-    url = "https://api.bitbucket.org/1.0/repositories/%s/%s/issues/?start=%d" % (options.bitbucket_username, options.bitbucket_repo, options.start-1) #-1 because the start option is id-1
-    try:
-        response = urllib2.urlopen(url)
-    except urllib2.HTTPError as ex:
-        raise ValueError(
-            'Problem trying to connect to bitbucket ({url}): {ex} '
-            'Hint: the bitbucket repository name is case-sensitive.'
-            .format(url=url, ex=ex))
 
-    result = json.loads(response.read())
-    if not result['issues']:
-        # Check to see if there is issues to process if not break out.
-        break
+if __name__ == "__main__":
+    parser = OptionParser()
 
-    for issue in result['issues']:
-        issues.append(issue)
-        options.start += 1
+    parser.add_option(
+        "-t", "--dry-run",
+        action="store_true", dest="dry_run", default=False,
+        help="Preform a dry run and print eveything."
+    )
 
+    parser.add_option(
+        "-g", "--github-username", dest="github_username",
+        help="GitHub username"
+    )
 
-# Sort issues, to sync issue numbers on freshly created GitHub projects.
-# Note: not memory efficient, could use too much memory on large projects.
-for issue in sorted(issues, key=lambda issue: issue['local_id']):
-    comments = get_comments(issue)
+    parser.add_option(
+        "-d", "--github_repo", dest="github_repo",
+        help="GitHub to add issues to. Format: <username>/<repo name>"
+    )
 
+    parser.add_option(
+        "-s", "--bitbucket_repo", dest="bitbucket_repo",
+        help="Bitbucket repo to pull data from."
+    )
 
-    if options.dry_run:
-        print "Title: {0}".format(issue.get('title').encode('utf-8'))
-        print "Body: {0}".format(format_body(issue).encode('utf-8'))
-        print "Comments", [comment['body'] for comment in comments]
-    else:
-        # Create the isssue
-        issue_data = {'title': issue.get('title').encode('utf-8'),
-                      'body': format_body(issue).encode('utf-8')}
-        ni = github.issues.create(issue_data, options.github_repo.split('/')[0], options.github_repo.split('/')[1] )
+    parser.add_option(
+        "-u", "--bitbucket_username", dest="bitbucket_username",
+        help="Bitbucket username"
+    )
 
-        # Set the status and labels
-        if issue.get('status') == 'resolved':
-            github.issues.update(ni.number,
-                                 {'state': 'closed'},
-                                 user=options.github_repo.split('/')[0],
-                                 repo=options.github_repo.split('/')[1])
+    parser.add_option(
+        "-f", "--start", type="int", dest="start",
+        help="Bitbucket id of the issue to start import"
+    )
 
-        # Everything else is done with labels in github
-        # TODO: there seems to be a problem with the add_to_issue method of
-        #       pygithub3, so it's not possible to assign labels to issues
+    (options, args) = parser.parse_args()
 
-        elif issue.get('status') == 'wontfix':
-            pass
-        elif issue.get('status') == 'on hold':
-            pass
-        elif issue.get('status') == 'invalid':
-            pass
-        elif issue.get('status') == 'duplicate':
-            pass
-        elif issue.get('status') == 'wontfix':
-            pass
+    # Login in to github and create object
+    github_password = getpass.getpass("Please enter your github password\n")
+    github = Github(login=options.github_username, password=github_password)
 
-        #github.issues.labels.add_to_issue(ni.number,
-        #                                  issue['metadata']['kind'],
-        #                                  user=options.github_username,
-        #                                  repo=options.github_repo,
-        #                                  )
-        #sys.exit()
+    issue_counts = 0
+    issues = []
+    while True:
+        url = "https://api.bitbucket.org/1.0/repositories/{}/{}/issues/?start={}".format(
+            options.bitbucket_username,
+            options.bitbucket_repo,
+            options.start - 1   # -1 because the start option is id-1
+        )
+        try:
+            response = urllib2.urlopen(url)
+        except urllib2.HTTPError as ex:
+            raise ValueError(
+                'Problem trying to connect to bitbucket ({url}): {ex} '
+                'Hint: the bitbucket repository name is case-sensitive.'
+                .format(url=url, ex=ex))
 
-        #github.issues.labels.add_to_issue(ni.number,
-        #                                  options.github_username,
-        #                                  options.github_repo,
-        #                                  ('import',))
+        result = json.loads(response.read())
+        if not result['issues']:
+            # Check to see if there is issues to process if not break out.
+            break
 
-        # Milestones
+        for issue in result['issues']:
+            issues.append(issue)
+            options.start += 1
 
+    # Sort issues, to sync issue numbers on freshly created GitHub projects.
+    # Note: not memory efficient, could use too much memory on large projects.
+    for issue in sorted(issues, key=lambda issue: issue['local_id']):
+        comments = get_comments(issue)
 
+        if options.dry_run:
+            print "Title: {0}".format(issue.get('title').encode('utf-8'))
+            print "Body: {0}".format(format_body(issue).encode('utf-8'))
+            print "Comments", [comment['body'] for comment in comments]
+        else:
+            # Create the issue
+            issue_data = {'title': issue.get('title').encode('utf-8'),
+                          'body': format_body(issue).encode('utf-8')}
+            ni = github.issues.create(
+                issue_data,
+                options.github_repo.split('/')[0],
+                options.github_repo.split('/')[1]
+            )
 
-        # Add the comments
-        comment_count = 0
-        for comment in comments:
-            github.issues.comments.create(ni.number,
-                                        format_comment(comment),
-                                        options.github_repo.split('/')[0],
-                                        options.github_repo.split('/')[1])
-            comment_count += 1
+            # Set the status and labels
+            if issue.get('status') == 'resolved':
+                github.issues.update(ni.number,
+                                     {'state': 'closed'},
+                                     user=options.github_repo.split('/')[0],
+                                     repo=options.github_repo.split('/')[1])
 
-        print u"Created: {0} with {1} comments".format(issue['title'], comment_count)
-    issue_counts += 1
+            # Everything else is done with labels in github
+            # TODO: there seems to be a problem with the add_to_issue method of
+            #       pygithub3, so it's not possible to assign labels to issues
 
-print "Created {0} issues".format(issue_counts)
+            elif issue.get('status') == 'wontfix':
+                pass
+            elif issue.get('status') == 'on hold':
+                pass
+            elif issue.get('status') == 'invalid':
+                pass
+            elif issue.get('status') == 'duplicate':
+                pass
+            elif issue.get('status') == 'wontfix':
+                pass
 
-sys.exit()
+            #github.issues.labels.add_to_issue(ni.number,
+            #                                  issue['metadata']['kind'],
+            #                                  user=options.github_username,
+            #                                  repo=options.github_repo,
+            #                                  )
+            #sys.exit()
+
+            #github.issues.labels.add_to_issue(ni.number,
+            #                                  options.github_username,
+            #                                  options.github_repo,
+            #                                  ('import',))
+
+            # Milestones
+
+            # Add the comments
+            comment_count = 0
+            for comment in comments:
+                github.issues.comments.create(
+                    ni.number,
+                    format_comment(comment),
+                    options.github_repo.split('/')[0],
+                    options.github_repo.split('/')[1]
+                )
+                comment_count += 1
+
+            print u"Created: {0} with {1} comments".format(issue['title'], comment_count)
+        issue_counts += 1
+
+    print "Created {0} issues".format(issue_counts)
