@@ -88,17 +88,20 @@ def format_name(issue):
         return "Anonymous"
 
 
-def format_body(issue):
+def format_body(options, issue):
     content = clean_body(issue.get('content'))
-    url = "https://bitbucket.org/{}/{}/issue/{}".format(
-        options.bitbucket_username, options.bitbucket_repo, issue['local_id']
-    )
-    return content + """\n
----------------------------------------
-- Bitbucket: {}
+    return """{}
+{}
+- Bitbucket: https://bitbucket.org/{}/{}/issue/{}
 - Originally Reported By: {}
 - Originally Created At: {}
-""".format(url, format_name(issue), issue['created_on'])
+""".format(
+        content,
+        '-' * 40,
+        options.bitbucket_username, options.bitbucket_repo, issue['local_id']
+        format_name(issue),
+        issue['created_on']
+    )
 
 
 def format_comment(comment):
@@ -212,12 +215,14 @@ if __name__ == "__main__":
 
         if options.dry_run:
             print "Title: {0}".format(issue.get('title').encode('utf-8'))
-            print "Body: {0}".format(format_body(issue).encode('utf-8'))
+            print "Body: {0}".format(
+                format_body(options, issue).encode('utf-8')
+            )
             print "Comments", [comment['body'] for comment in comments]
         else:
             # Create the issue
             issue_data = {'title': issue.get('title').encode('utf-8'),
-                          'body': format_body(issue).encode('utf-8')}
+                          'body': format_body(options, issue).encode('utf-8')}
             ni = github.issues.create(
                 issue_data,
                 options.github_repo.split('/')[0],
