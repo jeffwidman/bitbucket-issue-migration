@@ -33,20 +33,20 @@ except ImportError:
 def read_arguments():
     parser = argparse.ArgumentParser(
         description=(
-            "A tool to migrate issues from BitBucket to GitHub.\n"
-            "note: the BitBucket repository and issue tracker have to be"
+            "A tool to migrate issues from Bitbucket to GitHub.\n"
+            "note: the Bitbucket repository and issue tracker have to be"
             "public"
         )
     )
 
     parser.add_argument(
         "bitbucket_username",
-        help="Your BitBucket username"
+        help="Your Bitbucket username"
     )
 
     parser.add_argument(
         "bitbucket_repo",
-        help="BitBucket repository to pull data from."
+        help="Bitbucket repository to pull data from."
     )
 
     parser.add_argument(
@@ -143,10 +143,10 @@ def clean_body(body):
     return "\n".join(lines)
 
 
-# BitBucket fetch
+# Bitbucket fetch
 def get_issues(bb_url, start_id):
     '''
-    Fetch the issues from BitBucket
+    Fetch the issues from Bitbucket
     '''
     issues = []
 
@@ -179,7 +179,7 @@ def get_issues(bb_url, start_id):
 
 def get_comments(bb_url, issue):
     '''
-    Fetch the comments for a BitBucket issue
+    Fetch the comments for a Bitbucket issue
     '''
     url = "{}/{}/comments/".format(
         bb_url,
@@ -277,7 +277,7 @@ if __name__ == "__main__":
         options.bitbucket_repo
     )
 
-    # fetch issues from BitBucket
+    # fetch issues from Bitbucket
     issues = get_issues(bb_url, options.start)
 
     # push them in GitHub (issues comments are fetched here)
