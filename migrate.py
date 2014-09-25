@@ -180,14 +180,16 @@ if __name__ == "__main__":
             options.bitbucket_repo,
             options.start - 1   # -1 because the start option is id-1
         )
+
         try:
             response = urllib2.urlopen(url)
         except urllib2.HTTPError as ex:
-            raise ValueError(
+            ex.message = (
                 'Problem trying to connect to bitbucket ({url}): {ex} '
                 'Hint: the bitbucket repository name is case-sensitive.'
-                .format(url=url, ex=ex))
-
+                .format(url=url, ex=ex)
+            )
+            raise
         result = json.loads(response.read())
         if not result['issues']:
             # Check to see if there is issues to process if not break out.
