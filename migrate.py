@@ -96,12 +96,12 @@ def format_name(issue):
 
 def format_body(options, issue):
     content = clean_body(issue.get('content'))
-    return """{}
-{}
-- Bitbucket: https://bitbucket.org/{}/{}/issue/{}
-- Originally Reported By: {}
-- Originally Created At: {}
-""".format(
+    return u"""{}
+    {}
+    - Bitbucket: https://bitbucket.org/{}/{}/issue/{}
+    - Originally reported by: {}
+    - Originally created at: {}
+    """.format(
         content,
         '-' * 40,
         options.bitbucket_username, options.bitbucket_repo, issue['local_id'],
@@ -111,10 +111,14 @@ def format_body(options, issue):
 
 
 def format_comment(comment):
-    return comment['body'] + """\n
----------------------------------------
-Original Comment By: {}
-    """.format(comment['user'].encode('utf-8'))
+    return u"""{}
+    {}
+    Original comment by: {}
+    """.format(
+        comment['body'],
+        '-' * 40,
+        comment['user'].encode('utf-8')
+    )
 
 
 def clean_body(body):
