@@ -31,13 +31,12 @@ except ImportError:
 
 
 # Formatters
-
 def format_user(author_info):
     name = "Anonymous"
     if not author_info:
         return name
     if 'first_name' in author_info and 'last_name' in author_info:
-        name = " ".join([ author_info['first_name'],author_info['last_name']])
+        name = " ".join([author_info['first_name'], author_info['last_name']])
     elif 'username' in author_info:
         name = author_info['username']
     if 'username' in author_info:
@@ -47,11 +46,13 @@ def format_user(author_info):
     else:
         return name
 
+
 def format_name(issue):
     if 'reported_by' in issue:
         return format_user(issue['reported_by'])
     else:
         return "Anonymous"
+
 
 def format_body(issue):
     content = clean_body(issue.get('content'))
@@ -94,6 +95,7 @@ def clean_body(body):
                 lines.append(line.replace("{{{", "`").replace("}}}", "`"))
     return "\n".join(lines)
 
+
 def get_comments(issue):
     '''
     Fetch the comments for an issue
@@ -107,7 +109,8 @@ def get_comments(issue):
     for comment in result:
         body = comment['content'] or ''
 
-        # Status comments (assigned, version, etc. changes) have in bitbucket no body
+        # Status comments (assigned, version, etc. changes) have in bitbucket
+        # no body
         if body:
             comments.append({
                 'user': format_user(comment['author_info']),
