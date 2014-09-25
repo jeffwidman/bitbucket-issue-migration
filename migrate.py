@@ -18,7 +18,7 @@
 # If not, see <http://www.gnu.org/licenses/>.
 
 
-from optparse import OptionParser
+import argparse
 import urllib2
 import getpass
 
@@ -31,36 +31,42 @@ except ImportError:
 
 
 def read_arguments():
-    parser = OptionParser()
+    parser = argparse.ArgumentParser(
+        description=(
+            "A tool to migrate issues from BitBucket to GitHub.\n"
+            "note: the BitBucket repository and issue tracker have to be"
+            "public"
+        )
+    )
 
-    parser.add_option(
-        "-t", "--dry-run",
+    parser.add_argument(
+        "bitbucket_username",
+        help="Your BitBucket username"
+    )
+
+    parser.add_argument(
+        "bitbucket_repo",
+        help="BitBucket repository to pull data from."
+    )
+
+    parser.add_argument(
+        "github_username",
+        help="Your GitHub username"
+    )
+
+    parser.add_argument(
+        "github_repo",
+        help="GitHub to add issues to. Format: <username>/<repo name>"
+    )
+
+    parser.add_argument(
+        "-n", "--dry-run",
         action="store_true", dest="dry_run", default=False,
         help="Perform a dry run and print eveything."
     )
 
-    parser.add_option(
-        "-g", "--github-username", dest="github_username",
-        help="GitHub username"
-    )
-
-    parser.add_option(
-        "-s", "--bitbucket_repo", dest="bitbucket_repo",
-        help="Bitbucket repo to pull data from."
-    )
-
-    parser.add_option(
-        "-u", "--bitbucket_username", dest="bitbucket_username",
-        help="Bitbucket username"
-    )
-
-    parser.add_option(
-        "-d", "--github_repo", dest="github_repo",
-        help="GitHub to add issues to. Format: <username>/<repo name>"
-    )
-
-    parser.add_option(
-        "-f", "--start", type="int", dest="start",
+    parser.add_argument(
+        "-f", "--start_id", type=int, dest="start", default=0,
         help="Bitbucket issue id from which to start import"
     )
 
@@ -261,7 +267,7 @@ def push_issue(gh_username, gh_repository, issue, body, comments):
 
 
 if __name__ == "__main__":
-    options, args = read_arguments()
+    options = read_arguments()
     bb_url = "https://api.bitbucket.org/1.0/repositories/{}/{}/issues".format(
         options.bitbucket_username,
         options.bitbucket_repo
