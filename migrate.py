@@ -14,20 +14,18 @@
 # along with the bitbucket issue migration script.
 # If not, see <http://www.gnu.org/licenses/>.
 
-from pygithub3 import Github
-from datetime import datetime, timedelta
+
+from optparse import OptionParser
 import urllib2
-import time
 import getpass
 
-import sys
+from pygithub3 import Github
 
 try:
     import json
 except ImportError:
     import simplejson as json
 
-from optparse import OptionParser
 parser = OptionParser()
 
 parser.add_option("-t", "--dry-run", action="store_true", dest="dry_run", default=False,
