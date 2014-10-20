@@ -1,3 +1,6 @@
+#!/usr/bin/env python
+#-*- coding: utf-8 -*-
+
 # This file is part of the bitbucket issue migration script.
 #
 # The script is free software: you can redistribute it and/or modify
@@ -14,64 +17,75 @@
 # along with the bitbucket issue migration script.
 # If not, see <http://www.gnu.org/licenses/>.
 
-from pygithub3 import Github
-from datetime import datetime, timedelta
+
+import argparse
 import urllib2
-import time
 import getpass
 
-import sys
+from pygithub3 import Github
 
 try:
     import json
 except ImportError:
     import simplejson as json
 
-from optparse import OptionParser
-parser = OptionParser()
 
-parser.add_option("-t", "--dry-run", action="store_true", dest="dry_run", default=False,
-    help="Preform a dry run and print eveything.")
+def read_arguments():
+    parser = argparse.ArgumentParser(
+        description=(
+            "A tool to migrate issues from Bitbucket to GitHub.\n"
+            "note: the Bitbucket repository and issue tracker have to be"
+            "public"
+        )
+    )
 
-parser.add_option("-g", "--github-username", dest="github_username",
-    help="GitHub username")
+    parser.add_argument(
+        "bitbucket_username",
+        help="Your Bitbucket username"
+    )
 
-parser.add_option("-d", "--github_repo", dest="github_repo",
-    help="GitHub to add issues to. Format: <username>/<repo name>")
+    parser.add_argument(
+        "bitbucket_repo",
+        help="Bitbucket repository to pull data from."
+    )
 
-parser.add_option("-s", "--bitbucket_repo", dest="bitbucket_repo",
-    help="Bitbucket repo to pull data from.")
+    parser.add_argument(
+        "github_username",
+        help="Your GitHub username"
+    )
 
-parser.add_option("-u", "--bitbucket_username", dest="bitbucket_username",
-    help="Bitbucket username")
-    
-parser.add_option("-f", "--start", type="int", dest="start",
-    help="Bitbucket id of the issue to start import")    
+    parser.add_argument(
+        "github_repo",
+        help="GitHub to add issues to. Format: <username>/<repo name>"
+    )
 
-(options, args) = parser.parse_args()
+    parser.add_argument(
+        "-n", "--dry-run",
+        action="store_true", dest="dry_run", default=False,
+        help="Perform a dry run and print eveything."
+    )
 
-print 'Please enter your github password'
-github_password = getpass.getpass()
+    parser.add_argument(
+        "-f", "--start_id", type=int, dest="start", default=0,
+        help="Bitbucket issue id from which to start import"
+    )
 
-# Login in to github and create object
-github = Github(login=options.github_username, password=github_password)
-
+    return parser.parse_args()
 
 
 # Formatters
-
 def format_user(author_info):
-    name = "Anonymous"
     if not author_info:
-        return name
-    if 'first_name' in author_info and 'last_name' in author_info:
-        name = " ".join([ author_info['first_name'],author_info['last_name']])
-    elif 'username' in author_info:
-        name = author_info['username']
+        return "Anonymous"
+
+    if author_info['first_name'] and author_info['last_name']:
+        return " ".join([author_info['first_name'], author_info['last_name']])
+
     if 'username' in author_info:
-        return '[%s](http://bitbucket.org/%s)' % (name, author_info['username'])
-    else:
-        return name
+        return '[{0}](http://bitbucket.org/{0})'.format(
+            author_info['username']
+        )
+
 
 def format_name(issue):
     if 'reported_by' in issue:
@@ -79,21 +93,35 @@ def format_name(issue):
     else:
         return "Anonymous"
 
-def format_body(issue):
+
+def format_body(options, issue):
     content = clean_body(issue.get('content'))
-    url = "https://bitbucket.org/%s/%s/issue/%s" % (options.bitbucket_username, options.bitbucket_repo, issue['local_id'])
-    return content + """\n
----------------------------------------
-- Bitbucket: %s
-- Originally Reported By: %s
-- Originally Created At: %s
-""" % (url, format_name(issue), issue['created_on'])
+    return u"""{}
+
+{}
+- Bitbucket: https://bitbucket.org/{}/{}/issue/{}
+- Originally reported by: {}
+- Originally created at: {}
+""".format(
+        content,
+        '-' * 40,
+        options.bitbucket_username, options.bitbucket_repo, issue['local_id'],
+        format_name(issue),
+        issue['created_on']
+    )
+
 
 def format_comment(comment):
-    return comment['body'] + """\n
----------------------------------------
-Original Comment By: %s
-    """ % (comment['user'].encode('utf-8'))
+    return u"""{}
+
+{}
+Original comment by: {}
+""".format(
+        comment['body'],
+        '-' * 40,
+        comment['user'].encode('utf-8')
+    )
+
 
 def clean_body(body):
     lines = []
@@ -116,18 +144,58 @@ def clean_body(body):
                 lines.append(line.replace("{{{", "`").replace("}}}", "`"))
     return "\n".join(lines)
 
-def get_comments(issue):
+
+# Bitbucket fetch
+def get_issues(bb_url, start_id):
     '''
-    Fetch the comments for an issue
+    Fetch the issues from Bitbucket
     '''
-    url = "https://api.bitbucket.org/1.0/repositories/%s/%s/issues/%s/comments/" % (options.bitbucket_username, options.bitbucket_repo, issue['local_id'])
+    issues = []
+
+    while True:
+        url = "{}/?start={}".format(
+            bb_url,
+            start_id
+        )
+
+        try:
+            response = urllib2.urlopen(url)
+        except urllib2.HTTPError as ex:
+            ex.message = (
+                'Problem trying to connect to bitbucket ({url}): {ex} '
+                'Hint: the bitbucket repository name is case-sensitive.'
+                .format(url=url, ex=ex)
+            )
+            raise
+        else:
+            result = json.loads(response.read())
+            if not result['issues']:
+                # Check to see if there is issues to process if not break out.
+                break
+
+            issues += result['issues']
+            start_id += len(result['issues'])
+
+    return issues
+
+
+def get_comments(bb_url, issue):
+    '''
+    Fetch the comments for a Bitbucket issue
+    '''
+    url = "{}/{}/comments/".format(
+        bb_url,
+        issue['local_id']
+    )
     result = json.loads(urllib2.urlopen(url).read())
+    ordered = sorted(result, key=lambda comment: comment["utc_created_on"])
 
     comments = []
-    for comment in result:
+    for comment in ordered:
         body = comment['content'] or ''
 
-        # Status comments (assigned, version, etc. changes) have in bitbucket no body
+        # Status comments (assigned, version, etc. changes) have in bitbucket
+        # no body
         if body:
             comments.append({
                 'user': format_user(comment['author_info']),
@@ -138,94 +206,100 @@ def get_comments(issue):
 
     return comments
 
-issue_counts = 0
-issues = []
-while True:
-    url = "https://api.bitbucket.org/1.0/repositories/%s/%s/issues/?start=%d" % (options.bitbucket_username, options.bitbucket_repo, options.start-1) #-1 because the start option is id-1
-    try:
-        response = urllib2.urlopen(url)
-    except urllib2.HTTPError as ex:
-        raise ValueError(
-            'Problem trying to connect to bitbucket ({url}): {ex} '
-            'Hint: the bitbucket repository name is case-sensitive.'
-            .format(url=url, ex=ex))
 
-    result = json.loads(response.read())
-    if not result['issues']:
-        # Check to see if there is issues to process if not break out.
-        break
+# GitHub push
+def push_issue(gh_username, gh_repository, issue, body, comments):
+    # Create the issue
+    issue_data = {
+        'title': issue.get('title').encode('utf-8'),
+        'body': body
+    }
+    new_issue = github.issues.create(
+        issue_data,
+        gh_username,
+        gh_repository
+    )
 
-    for issue in result['issues']:
-        issues.append(issue)
-        options.start += 1
+    # Set the status and labels
+    if issue.get('status') == 'resolved':
+        github.issues.update(
+            new_issue.number,
+            {'state': 'closed'},
+            user=gh_username,
+            repo=gh_repository
+        )
 
+    # Everything else is done with labels in github
+    # TODO: there seems to be a problem with the add_to_issue method of
+    #       pygithub3, so it's not possible to assign labels to issues
+    elif issue.get('status') == 'wontfix':
+        pass
+    elif issue.get('status') == 'on hold':
+        pass
+    elif issue.get('status') == 'invalid':
+        pass
+    elif issue.get('status') == 'duplicate':
+        pass
+    elif issue.get('status') == 'wontfix':
+        pass
 
-# Sort issues, to sync issue numbers on freshly created GitHub projects.
-# Note: not memory efficient, could use too much memory on large projects.
-for issue in sorted(issues, key=lambda issue: issue['local_id']):
-    comments = get_comments(issue)
+    # github.issues.labels.add_to_issue(
+    #     new_issue.number,
+    #     issue['metadata']['kind'],
+    #     user=gh_username,
+    #     repo=gh_repository
+    # )
 
+    # github.issues.labels.add_to_issue(
+    #     new_issue.number,
+    #     gh_username,
+    #     gh_repository,
+    #     ('import',)
+    # )
 
-    if options.dry_run:
-        print "Title: {0}".format(issue.get('title').encode('utf-8'))
-        print "Body: {0}".format(format_body(issue).encode('utf-8'))
-        print "Comments", [comment['body'] for comment in comments]
-    else:
-        # Create the isssue
-        issue_data = {'title': issue.get('title').encode('utf-8'),
-                      'body': format_body(issue).encode('utf-8')}
-        ni = github.issues.create(issue_data, options.github_repo.split('/')[0], options.github_repo.split('/')[1] )
+    # Milestones
 
-        # Set the status and labels
-        if issue.get('status') == 'resolved':
-            github.issues.update(ni.number,
-                                 {'state': 'closed'},
-                                 user=options.github_repo.split('/')[0],
-                                 repo=options.github_repo.split('/')[1])
+    # Add the comments
+    for comment in comments:
+        github.issues.comments.create(
+            new_issue.number,
+            format_comment(comment),
+            gh_username,
+            gh_repository
+        )
 
-        # Everything else is done with labels in github
-        # TODO: there seems to be a problem with the add_to_issue method of
-        #       pygithub3, so it's not possible to assign labels to issues
-
-        elif issue.get('status') == 'wontfix':
-            pass
-        elif issue.get('status') == 'on hold':
-            pass
-        elif issue.get('status') == 'invalid':
-            pass
-        elif issue.get('status') == 'duplicate':
-            pass
-        elif issue.get('status') == 'wontfix':
-            pass
-
-        #github.issues.labels.add_to_issue(ni.number,
-        #                                  issue['metadata']['kind'],
-        #                                  user=options.github_username,
-        #                                  repo=options.github_repo,
-        #                                  )
-        #sys.exit()
-
-        #github.issues.labels.add_to_issue(ni.number,
-        #                                  options.github_username,
-        #                                  options.github_repo,
-        #                                  ('import',))
-
-        # Milestones
+    print u"Created: {} [{} comments]".format(
+        issue['title'], len(comments)
+    )
 
 
+if __name__ == "__main__":
+    options = read_arguments()
+    bb_url = "https://api.bitbucket.org/1.0/repositories/{}/{}/issues".format(
+        options.bitbucket_username,
+        options.bitbucket_repo
+    )
 
-        # Add the comments
-        comment_count = 0
-        for comment in comments:
-            github.issues.comments.create(ni.number,
-                                        format_comment(comment),
-                                        options.github_repo.split('/')[0],
-                                        options.github_repo.split('/')[1])
-            comment_count += 1
+    # fetch issues from Bitbucket
+    issues = get_issues(bb_url, options.start)
 
-        print u"Created: {0} with {1} comments".format(issue['title'], comment_count)
-    issue_counts += 1
+    # push them in GitHub (issues comments are fetched here)
+    github_password = getpass.getpass("Please enter your GitHub password\n")
+    github = Github(login=options.github_username, password=github_password)
+    gh_username, gh_repository = options.github_repo.split('/')
 
-print "Created {0} issues".format(issue_counts)
+    # Sort issues, to sync issue numbers on freshly created GitHub projects.
+    # Note: not memory efficient, could use too much memory on large projects.
+    for issue in sorted(issues, key=lambda issue: issue['local_id']):
+        comments = get_comments(bb_url, issue)
 
-sys.exit()
+        if options.dry_run:
+            print "Title: {}".format(issue.get('title').encode('utf-8'))
+            print "Body: {}".format(
+                format_body(options, issue).encode('utf-8')
+            )
+            print "Comments", [comment['body'] for comment in comments]
+        else:
+            body = format_body(options, issue).encode('utf-8')
+            push_issue(gh_username, gh_repository, issue, body, comments)
+            print "Created {} issues".format(len(issues))
