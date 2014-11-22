@@ -1,1 +1,2 @@
-pygithub3
+PyGithub==1.17.0
+pyquery==1.2.4

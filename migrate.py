@@ -17,18 +17,25 @@
 # along with the bitbucket issue migration script.
 # If not, see <http://www.gnu.org/licenses/>.
 
-
 import argparse
 import urllib2
 import getpass
+import logging
+import sys
 
-from pygithub3 import Github
+from github import Github
+from github import GithubException
+
+logging.basicConfig(level = logging.ERROR)
 
 try:
     import json
 except ImportError:
     import simplejson as json
 
+def output(string):
+    sys.stdout.write(string)
+    sys.stdout.flush()
 
 def read_arguments():
     parser = argparse.ArgumentParser(
@@ -66,7 +73,7 @@ def read_arguments():
     )
 
     parser.add_argument(
-        "-f", "--start_id", type=int, dest="start", default=0,
+        "-f", "--start", type=int, dest="start", default=0,
         help="Bitbucket issue id from which to start import"
     )
 
@@ -207,99 +214,120 @@ def get_comments(bb_url, issue):
     return comments
 
 
-# GitHub push
-def push_issue(gh_username, gh_repository, issue, body, comments):
-    # Create the issue
-    issue_data = {
-        'title': issue.get('title').encode('utf-8'),
-        'body': body
-    }
-    new_issue = github.issues.create(
-        issue_data,
-        gh_username,
-        gh_repository
-    )
+def github_label(name, color = "FFFFFF"):
+    """ Returns the Github label with the given name, creating it if necessary. """
 
+    try:
+        return label_cache[name]
+    except KeyError:
+        try:
+            return label_cache.setdefault(name, github_repo.get_label(name))
+        except GithubException:
+            return label_cache.setdefault(name, github_repo.create_label(name, color))
+
+
+def add_comments_to_issue(github_issue, bitbucket_comments):
+    """ Migrates all comments from a Bitbucket issue to its Github copy. """
+
+    # Retrieve existing Github comments, to figure out which Google Code comments are new
+    existing_comments = [comment.body for comment in github_issue.get_comments()]
+
+    if len(bitbucket_comments) > 0:
+        output(", adding comments")
+
+    for i, comment in enumerate(bitbucket_comments):
+        body = u'_From {user} on {created_at}_\n\n{body}'.format(**comment)
+        if body in existing_comments:
+            logging.info('Skipping comment %d: already present', i + 1)
+        else:
+            logging.info('Adding comment %d', i + 1)
+            if not options.dry_run:
+                github_issue.create_comment(body.encode('utf-8'))
+                output('.')
+    output('\n')
+
+
+# GitHub push
+def push_issue(gh_username, gh_repository, issue, body):
+    """ Migrates the given Bitbucket issue to Github. """
+
+    body = issue['content'].replace('%', '&#37;')
+
+    output('Adding issue [%d]: %s' % (issue.get('local_id'), issue.get('title').encode('utf-8')))
+
+    github_labels = []
     # Set the status and labels
     if issue.get('status') == 'resolved':
-        github.issues.update(
-            new_issue.number,
-            {'state': 'closed'},
-            user=gh_username,
-            repo=gh_repository
-        )
-
+        pass
     # Everything else is done with labels in github
-    # TODO: there seems to be a problem with the add_to_issue method of
-    #       pygithub3, so it's not possible to assign labels to issues
-    elif issue.get('status') == 'wontfix':
-        pass
-    elif issue.get('status') == 'on hold':
-        pass
-    elif issue.get('status') == 'invalid':
-        pass
-    elif issue.get('status') == 'duplicate':
-        pass
-    elif issue.get('status') == 'wontfix':
-        pass
+    else:
+        github_labels = [github_label(issue['status'])]
 
-    # github.issues.labels.add_to_issue(
-    #     new_issue.number,
-    #     issue['metadata']['kind'],
-    #     user=gh_username,
-    #     repo=gh_repository
-    # )
-
-    # github.issues.labels.add_to_issue(
-    #     new_issue.number,
-    #     gh_username,
-    #     gh_repository,
-    #     ('import',)
-    # )
+    github_issue = None
+    if not options.dry_run:
+        github_issue = github_repo.create_issue(issue['title'], body = body.encode('utf-8'), labels = github_labels)
+    
+    # Set the status and labels
+    if issue.get('status') == 'resolved':
+        github_issue.edit(state = 'closed')
 
     # Milestones
 
-    # Add the comments
-    for comment in comments:
-        github.issues.comments.create(
-            new_issue.number,
-            format_comment(comment),
-            gh_username,
-            gh_repository
-        )
-
-    print u"Created: {} [{} comments]".format(
-        issue['title'], len(comments)
-    )
+    return github_issue
 
 
 if __name__ == "__main__":
     options = read_arguments()
-    bb_url = "https://api.bitbucket.org/1.0/repositories/{}/{}/issues".format(
+    bb_url = "https://bitbucket.org/api/1.0/repositories/{}/{}/issues".format(
         options.bitbucket_username,
         options.bitbucket_repo
     )
 
+    # Cache Github tags, to avoid unnecessary API requests
+    label_cache = {}
+
+    google_project_name = options.github_repo
+
     # fetch issues from Bitbucket
     issues = get_issues(bb_url, options.start)
 
-    # push them in GitHub (issues comments are fetched here)
-    github_password = getpass.getpass("Please enter your GitHub password\n")
-    github = Github(login=options.github_username, password=github_password)
-    gh_username, gh_repository = options.github_repo.split('/')
+    while True:
+        github_password = getpass.getpass("Github password: ")
+        try:
+            Github(options.github_username, github_password).get_user().login
+            break
+        except Exception:
+            output("Bad credentials, try again.\n")
+
+    github = Github(options.github_username, github_password)
+
+    github_user = github.get_user()
+
+    # If the project name is specified as owner/project, assume that it's owned by either
+    # a different user than the one we have credentials for, or an organization.
+
+    if "/" in google_project_name:
+        gh_username, gh_repository = google_project_name.split('/')
+        try:
+            github_owner = github.get_user(gh_username)
+        except GithubException:
+            try:
+                github_owner = github.get_organization(gh_username)
+            except GithubException:
+                github_owner = github_user
+    else:
+        github_owner = github_user
+
+    github_repo = github_owner.get_repo(gh_repository)
 
     # Sort issues, to sync issue numbers on freshly created GitHub projects.
     # Note: not memory efficient, could use too much memory on large projects.
     for issue in sorted(issues, key=lambda issue: issue['local_id']):
-        comments = get_comments(bb_url, issue)
+        body = format_body(options, issue).encode('utf-8')
+        github_issue = push_issue(gh_username, gh_repository, issue, body)
+        
+        if github_issue:
+            comments = get_comments(bb_url, issue)
+            add_comments_to_issue(github_issue, comments)
 
-        if options.dry_run:
-            print "Title: {}".format(issue.get('title').encode('utf-8'))
-            print "Body: {}".format(
-                format_body(options, issue).encode('utf-8')
-            )
-            print "Comments", [comment['body'] for comment in comments]
-        else:
-            body = format_body(options, issue).encode('utf-8')
-            push_issue(gh_username, gh_repository, issue, body, comments)
-            print "Created {} issues".format(len(issues))
+    output("Created {} issues\n".format(len(issues)))
