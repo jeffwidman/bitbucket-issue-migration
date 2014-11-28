@@ -190,6 +190,7 @@ def get_comments(bb_url, issue):
     '''
     Fetch the comments for a Bitbucket issue
     '''
+
     url = "{}/{}/comments/".format(
         bb_url,
         issue['local_id']
@@ -230,7 +231,10 @@ def add_comments_to_issue(github_issue, bitbucket_comments):
     """ Migrates all comments from a Bitbucket issue to its Github copy. """
 
     # Retrieve existing Github comments, to figure out which Google Code comments are new
-    existing_comments = [comment.body for comment in github_issue.get_comments()]
+    if not options.dry_run:
+        existing_comments = [comment.body for comment in github_issue.get_comments()]
+    else:
+        existing_comments = []
 
     if len(bitbucket_comments) > 0:
         output(", adding comments")
@@ -243,9 +247,7 @@ def add_comments_to_issue(github_issue, bitbucket_comments):
             logging.info('Adding comment %d', i + 1)
             if not options.dry_run:
                 github_issue.create_comment(body.encode('utf-8'))
-                output('.')
-    output('\n')
-
+            output('.')
 
 # GitHub push
 def push_issue(gh_username, gh_repository, issue, body):
@@ -268,8 +270,9 @@ def push_issue(gh_username, gh_repository, issue, body):
         github_issue = github_repo.create_issue(issue['title'], body = body.encode('utf-8'), labels = github_labels)
     
     # Set the status and labels
-    if issue.get('status') == 'resolved':
-        github_issue.edit(state = 'closed')
+    if not options.dry_run:
+        if issue.get('status') == 'resolved':
+            github_issue.edit(state = 'closed')
 
     # Milestones
 
@@ -316,7 +319,8 @@ if __name__ == "__main__":
             except GithubException:
                 github_owner = github_user
     else:
-        github_owner = github_user
+        gh_username = github_owner = github_user
+        gh_repository = google_project_name
 
     github_repo = github_owner.get_repo(gh_repository)
 
@@ -325,9 +329,8 @@ if __name__ == "__main__":
     for issue in sorted(issues, key=lambda issue: issue['local_id']):
         body = format_body(options, issue).encode('utf-8')
         github_issue = push_issue(gh_username, gh_repository, issue, body)
-        
-        if github_issue:
-            comments = get_comments(bb_url, issue)
-            add_comments_to_issue(github_issue, comments)
+        comments = get_comments(bb_url, issue)
+        add_comments_to_issue(github_issue, comments)
+        output('\n')
 
     output("Created {} issues\n".format(len(issues)))
