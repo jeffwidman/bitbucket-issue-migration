@@ -120,11 +120,10 @@ Original comment by: {}
 """.format(
         comment['body'],
         '-' * 40,
-        #comment['user'].encode('utf-8')  # it is already a unicode
         comment['user']
     )
   except Exception as inst:
-    print "Exception [", inst, "]. The field is: [",comment['body']," - ", comment['user'],"] of type: ",type(comment['body']),"-", type(comment['user'])
+    print "Exception [", inst, "]. Body and user: [", comment['body']," - ", comment['user'],"] of types: [", type(comment['body']),", ", type(comment['user']), "]"
     raise
 
 
@@ -313,7 +312,7 @@ if __name__ == "__main__":
          except Exception as inst:
             print "Failure: [", inst, "] type [", type(inst), "] "
             if hasattr(inst, 'response'):
-               print "read [", inst.response.text, "]"
+               print "Response was [", inst.response.text, "]"
             raise
          count+=1
          print "Created {} / {} issues".format(count, len(issues))
