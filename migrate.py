@@ -158,31 +158,6 @@ def clean_body(body):
     return "\n".join(lines)
 
 
-def _iter_issues(bb_url, start_id):
-    '''
-    Fetch the issues from Bitbucket, one page at a time.
-    '''
-    url = "{bb_url}/?start={start_id}".format(**locals())
-
-    try:
-        response = urllib.request.urlopen(url)
-    except urllib.error.HTTPError as ex:
-        ex.message = (
-            'Problem trying to connect to bitbucket ({url}): {ex} '
-            'Hint: the bitbucket repository name is case-sensitive.'
-            .format(url=url, ex=ex)
-        )
-        raise
-
-    result = json.loads(response.read())
-    if not result['issues']:
-        # No issues encountered at or above start_id
-        raise StopIteration()
-
-    next_start = start_id + len(result['issues'])
-    return itertools.chain(result['issues'], _iter_issues(bb_url, next_start))
-
-
 def get_comments(bb_url, issue):
     '''
     Fetch the comments for a Bitbucket issue
@@ -224,7 +199,7 @@ class Handler(object):
         return handler_cls(options)
 
     def get_issues(self):
-        issues = _iter_issues(self.bb_url, self.options.start)
+        issues = self._iter_issues(self.options.start)
         # In order to sync issue numbers on a freshly-created Github project,
         # sort the issues by local_id
         # Note: not memory efficient and could use too much memory on large
@@ -239,6 +214,30 @@ class Handler(object):
 
     def get_comments(self, issue):
         return get_comments(self.bb_url, issue)
+
+    def _iter_issues(self, start_id):
+        '''
+        Fetch the issues from Bitbucket, one page at a time.
+        '''
+        url = "{self.bb_url}/?start={start_id}".format(**locals())
+
+        try:
+            response = urllib.request.urlopen(url)
+        except urllib.error.HTTPError as ex:
+            ex.message = (
+                'Problem trying to connect to bitbucket ({url}): {ex} '
+                'Hint: the bitbucket repository name is case-sensitive.'
+                .format(url=url, ex=ex)
+            )
+            raise
+
+        result = json.loads(response.read())
+        if not result['issues']:
+            # No issues encountered at or above start_id
+            raise StopIteration()
+
+        next_start = start_id + len(result['issues'])
+        return itertools.chain(result['issues'], self._iter_issues(next_start))
 
 
 class SubmitHandler(Handler):
