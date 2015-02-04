@@ -41,12 +41,12 @@ def read_arguments():
 
     parser.add_argument(
         "bitbucket_username",
-        help="Your Bitbucket username"
+        help="Bitbucket username of the source repository."
     )
 
     parser.add_argument(
         "bitbucket_repo",
-        help="Bitbucket repository to pull data from."
+        help="Bitbucket project name for the source repo."
     )
 
     parser.add_argument(
