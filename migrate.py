@@ -277,8 +277,6 @@ class SubmitHandler(Handler):
             new_issue.edit(state='closed')
 
         # Everything else is done with labels in github
-        # TODO: there seems to be a problem with the add_to_issue method of
-        #       pygithub3, so it's not possible to assign labels to issues
         elif issue['status'] == 'wontfix':
             pass
         elif issue['status'] == 'on hold':
@@ -289,20 +287,6 @@ class SubmitHandler(Handler):
             pass
         elif issue['status'] == 'wontfix':
             pass
-
-        # github.issues.labels.add_to_issue(
-        #     new_issue.number,
-        #     issue['metadata']['kind'],
-        #     user=gh_username,
-        #     repo=gh_repository
-        # )
-
-        # github.issues.labels.add_to_issue(
-        #     new_issue.number,
-        #     gh_username,
-        #     gh_repository,
-        #     ('import',)
-        # )
 
         # Milestones
 
