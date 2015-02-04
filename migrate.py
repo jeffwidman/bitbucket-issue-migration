@@ -40,7 +40,6 @@ except ImportError:
 
 from six import text_type
 from six.moves import urllib
-from jaraco.functools import compose
 from jaraco.itertools import Counter
 
 
@@ -184,9 +183,6 @@ def _iter_issues(bb_url, start_id):
     return itertools.chain(result['issues'], _iter_issues(bb_url, next_start))
 
 
-get_issues = compose(list, _iter_issues)
-
-
 def get_comments(bb_url, issue):
     '''
     Fetch the comments for a Bitbucket issue
@@ -228,7 +224,7 @@ class Handler(object):
         return handler_cls(options)
 
     def get_issues(self):
-        issues = get_issues(self.bb_url, self.options.start)
+        issues = _iter_issues(self.bb_url, self.options.start)
         # In order to sync issue numbers on a freshly-created Github project,
         # sort the issues by local_id
         # Note: not memory efficient and could use too much memory on large
