@@ -250,7 +250,7 @@ class SubmitHandler(Handler):
             getpass.getpass("Please enter your GitHub password\n")
         )
         self.github = github.Github(
-            login=self.options.github_username,
+            login_or_token=self.options.github_username,
             password=github_password,
         )
         return super(SubmitHandler, self).run()
@@ -269,20 +269,12 @@ class SubmitHandler(Handler):
             'title': issue['title'],
             'body': body
         }
-        new_issue = self.github.issues.create(
-            issue_data,
-            gh_username,
-            gh_repository
-        )
+        repo = self.github.get_repo(repo_path)
+        new_issue = repo.create_issue(**issue_data)
 
         # Set the status and labels
         if issue['status'] == 'resolved':
-            self.github.issues.update(
-                new_issue.number,
-                {'state': 'closed'},
-                user=gh_username,
-                repo=gh_repository
-            )
+            new_issue.edit(state='closed')
 
         # Everything else is done with labels in github
         # TODO: there seems to be a problem with the add_to_issue method of
@@ -316,12 +308,7 @@ class SubmitHandler(Handler):
 
         # Add the comments
         for comment in comments:
-            self.github.issues.comments.create(
-                new_issue.number,
-                format_comment(comment),
-                gh_username,
-                gh_repository
-            )
+            new_issue.create_comment(format_comment(comment))
 
         print("Created: {} [{} comments]".format(
             issue['title'], len(comments)
