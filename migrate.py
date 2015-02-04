@@ -163,7 +163,7 @@ def get_comments(bb_url, issue):
     Fetch the comments for a Bitbucket issue
     '''
     url = "{bb_url}/{issue[local_id]}/comments/".format(**locals())
-    result = json.loads(urllib.request.urlopen(url).read())
+    result = json.loads(urllib.request.urlopen(url).read().decode('utf-8'))
     by_creation_date = operator.itemgetter("utc_created_on")
     ordered = sorted(result, key=by_creation_date)
     # filter only those that have content; status comments (assigned,
@@ -231,7 +231,7 @@ class Handler(object):
             )
             raise
 
-        result = json.loads(response.read())
+        result = json.loads(response.read().decode('utf-8'))
         if not result['issues']:
             # No issues encountered at or above start_id
             raise StopIteration()
