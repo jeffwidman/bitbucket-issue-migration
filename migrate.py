@@ -264,7 +264,6 @@ class SubmitHandler(Handler):
     def push_issue(self, issue, body, comments):
         # Create the issue
         repo_path = self.options.github_repo
-        gh_username, sep, gh_repository = repo_path.partition('/')
         issue_data = {
             'title': issue['title'],
             'body': body
