@@ -158,13 +158,13 @@ def clean_body(body):
 
 
 def get_issues(bb_url, start_id):
-    '''
-    Fetch the issues from Bitbucket
-    '''
     return list(_iter_issues(bb_url, start_id))
 
 
 def _iter_issues(bb_url, start_id):
+    '''
+    Fetch the issues from Bitbucket, one page at a time.
+    '''
     url = "{bb_url}/?start={start_id}".format(**locals())
 
     try:
