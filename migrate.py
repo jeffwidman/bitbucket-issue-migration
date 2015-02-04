@@ -213,14 +213,6 @@ def _parse_comment(comment):
     )
 
 
-def run():
-    options = read_arguments()
-
-    handler_cls = SubmitHandler if not options.dry_run else DryRunHandler
-    handler = handler_cls(options)
-    handler.run()
-
-
 class Handler(object):
     bb_base = "https://api.bitbucket.org/1.0/repositories/"
     bb_tmpl = bb_base + "{bitbucket_username}/{bitbucket_repo}/issues"
@@ -228,6 +220,12 @@ class Handler(object):
     def __init__(self, options):
         self.options = options
         self.bb_url = self.bb_tmpl.format(vars(options))
+
+    @classmethod
+    def best(cls):
+        options = read_arguments()
+        handler_cls = SubmitHandler if not options.dry_run else DryRunHandler
+        return handler_cls(options)
 
     def get_issues(self):
         issues = get_issues(self.bb_url, self.options.start)
@@ -344,4 +342,4 @@ class DryRunHandler(Handler):
 
 
 if __name__ == "__main__":
-    run()
+    Handler.best().run()
