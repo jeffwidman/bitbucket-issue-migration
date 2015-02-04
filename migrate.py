@@ -22,6 +22,7 @@ from __future__ import print_function
 import argparse
 import getpass
 import operator
+import itertools
 
 from pygithub3 import Github
 
@@ -160,30 +161,29 @@ def get_issues(bb_url, start_id):
     '''
     Fetch the issues from Bitbucket
     '''
-    issues = []
+    return list(_iter_issues(bb_url, start_id))
 
-    while True:
-        url = "{bb_url}/?start={start_id}".format(**locals())
 
-        try:
-            response = urllib.request.urlopen(url)
-        except urllib.error.HTTPError as ex:
-            ex.message = (
-                'Problem trying to connect to bitbucket ({url}): {ex} '
-                'Hint: the bitbucket repository name is case-sensitive.'
-                .format(url=url, ex=ex)
-            )
-            raise
+def _iter_issues(bb_url, start_id):
+    url = "{bb_url}/?start={start_id}".format(**locals())
 
-        result = json.loads(response.read())
-        if not result['issues']:
-            # Check to see if there is issues to process if not break out.
-            break
+    try:
+        response = urllib.request.urlopen(url)
+    except urllib.error.HTTPError as ex:
+        ex.message = (
+            'Problem trying to connect to bitbucket ({url}): {ex} '
+            'Hint: the bitbucket repository name is case-sensitive.'
+            .format(url=url, ex=ex)
+        )
+        raise
 
-        issues += result['issues']
-        start_id += len(result['issues'])
+    result = json.loads(response.read())
+    if not result['issues']:
+        # No issues encountered at or above start_id
+        raise StopIteration()
 
-    return issues
+    next_start = start_id + len(result['issues'])
+    return itertools.chain(result['issues'], _iter_issues(bb_url, next_start))
 
 
 def get_comments(bb_url, issue):
