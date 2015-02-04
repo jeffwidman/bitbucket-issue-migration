@@ -234,7 +234,7 @@ class Handler(object):
         result = json.loads(response.read().decode('utf-8'))
         if not result['issues']:
             # No issues encountered at or above start_id
-            raise StopIteration()
+            return result['issues']
 
         next_start = start_id + len(result['issues'])
         return itertools.chain(result['issues'], self._iter_issues(next_start))
