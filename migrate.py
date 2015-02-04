@@ -19,9 +19,7 @@
 
 from __future__ import print_function
 
-import sys
 import argparse
-import urllib2
 import getpass
 import operator
 
@@ -39,9 +37,8 @@ try:
 except ImportError:
     import simplejson as json
 
-PY2 = sys.version_info < (3,)
-
-text_type = str if not PY2 else unicode
+from six import text_type
+from six.moves import urllib
 
 
 def read_arguments():
@@ -173,8 +170,8 @@ def get_issues(bb_url, start_id):
         )
 
         try:
-            response = urllib2.urlopen(url)
-        except urllib2.HTTPError as ex:
+            response = urllib.request.urlopen(url)
+        except urllib.error.HTTPError as ex:
             ex.message = (
                 'Problem trying to connect to bitbucket ({url}): {ex} '
                 'Hint: the bitbucket repository name is case-sensitive.'
@@ -201,7 +198,7 @@ def get_comments(bb_url, issue):
         bb_url,
         issue['local_id']
     )
-    result = json.loads(urllib2.urlopen(url).read())
+    result = json.loads(urllib.request.urlopen(url).read())
     by_creation_date = operator.itemgetter("utc_created_on")
     ordered = sorted(result, key=by_creation_date)
     # filter only those that have content; status comments (assigned,
