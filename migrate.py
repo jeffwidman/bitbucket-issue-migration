@@ -194,10 +194,7 @@ def get_comments(bb_url, issue):
     '''
     Fetch the comments for a Bitbucket issue
     '''
-    url = "{}/{}/comments/".format(
-        bb_url,
-        issue['local_id']
-    )
+    url = "{bb_url}/{issue[local_id]}/comments/".format(**locals())
     result = json.loads(urllib.request.urlopen(url).read())
     by_creation_date = operator.itemgetter("utc_created_on")
     ordered = sorted(result, key=by_creation_date)
