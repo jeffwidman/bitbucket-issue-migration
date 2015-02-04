@@ -213,8 +213,9 @@ def _parse_comment(comment):
 
 
 # GitHub push
-def push_issue(github, gh_username, gh_repository, issue, body, comments):
+def push_issue(github, repo_path, issue, body, comments):
     # Create the issue
+    gh_username, sep, gh_repository = repo_path.partition('/')
     issue_data = {
         'title': issue.get('title').encode('utf-8'),
         'body': body
@@ -294,7 +295,6 @@ def run():
         getpass.getpass("Please enter your GitHub password\n")
     )
     github = Github(login=options.github_username, password=github_password)
-    gh_username, gh_repository = options.github_repo.split('/')
 
     # Sort issues, to sync issue numbers on freshly created GitHub projects.
     # Note: not memory efficient, could use too much memory on large projects.
@@ -310,8 +310,7 @@ def run():
             print("Comments", [comment['body'] for comment in comments])
         else:
             body = format_body(options, issue).encode('utf-8')
-            push_issue(github, gh_username, gh_repository, issue, body,
-                comments)
+            push_issue(github, options.github_repo, issue, body, comments)
             print("Created {} issues".format(len(issues)))
 
 
