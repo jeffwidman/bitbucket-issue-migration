@@ -208,7 +208,7 @@ class Handler(object):
         return sorted(issues, key=by_local_id)
 
     def run(self):
-        self.issues = Counter(self.get_issues)
+        self.issues = Counter(self.get_issues())
         for issue in self.issues:
             self.handle(issue)
 
