@@ -19,6 +19,7 @@
 
 from __future__ import print_function
 
+import sys
 import argparse
 import urllib2
 import getpass
@@ -30,6 +31,10 @@ try:
     import json
 except ImportError:
     import simplejson as json
+
+PY2 = sys.version_info < (3,)
+
+text_type = str if not PY2 else unicode
 
 
 def read_arguments():
@@ -128,7 +133,7 @@ Original comment by: {}
 def clean_body(body):
     lines = []
     in_block = False
-    for line in unicode(body).splitlines():
+    for line in text_type(body).splitlines():
         if line.startswith("{{{") or line.startswith("}}}"):
             if "{{{" in line:
                 before, part, after = line.partition("{{{")
