@@ -26,11 +26,11 @@ import operator
 from pygithub3 import Github
 
 try:
-	import keyring
+    import keyring
 except ImportError:
-	# keyring isn't available, so mock the interface to simulate no pw
-	class Keyring:
-		get_password = staticmethod(lambda system, username: None)
+    # keyring isn't available, so mock the interface to simulate no pw
+    class Keyring:
+        get_password = staticmethod(lambda system, username: None)
 
 try:
     import json
@@ -201,15 +201,15 @@ def get_comments(bb_url, issue):
 
 
 def _parse_comment(comment):
-	"""
-	Parse a comment as returned from Bitbucket API.
-	"""
-	return dict(
-		user=format_user(comment['author_info']),
-		created_at=comment['utc_created_on'],
-		body=comment['content'].encode('utf-8'),
-		number=comment['comment_id'],
-	)
+    """
+    Parse a comment as returned from Bitbucket API.
+    """
+    return dict(
+        user=format_user(comment['author_info']),
+        created_at=comment['utc_created_on'],
+        body=comment['content'].encode('utf-8'),
+        number=comment['comment_id'],
+    )
 
 
 # GitHub push
@@ -290,8 +290,8 @@ if __name__ == "__main__":
 
     # push them in GitHub (issues comments are fetched here)
     github_password = (
-    	keyring.get_password('Github', options.github_username) or
-    	getpass.getpass("Please enter your GitHub password\n")
+        keyring.get_password('Github', options.github_username) or
+        getpass.getpass("Please enter your GitHub password\n")
     )
     github = Github(login=options.github_username, password=github_password)
     gh_username, gh_repository = options.github_repo.split('/')
