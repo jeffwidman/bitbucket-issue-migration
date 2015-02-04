@@ -28,6 +28,13 @@ import operator
 from pygithub3 import Github
 
 try:
+	import keyring
+except ImportError:
+	# keyring isn't available, so mock the interface to simulate no pw
+	class Keyring:
+		get_password = staticmethod(lambda system, username: None)
+
+try:
     import json
 except ImportError:
     import simplejson as json
@@ -292,7 +299,10 @@ if __name__ == "__main__":
     issues = get_issues(bb_url, options.start)
 
     # push them in GitHub (issues comments are fetched here)
-    github_password = getpass.getpass("Please enter your GitHub password\n")
+    github_password = (
+    	keyring.get_password('Github', options.github_username) or
+    	getpass.getpass("Please enter your GitHub password\n")
+    )
     github = Github(login=options.github_username, password=github_password)
     gh_username, gh_repository = options.github_repo.split('/')
 
