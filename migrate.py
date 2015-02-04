@@ -175,14 +175,14 @@ def get_issues(bb_url, start_id):
                 .format(url=url, ex=ex)
             )
             raise
-        else:
-            result = json.loads(response.read())
-            if not result['issues']:
-                # Check to see if there is issues to process if not break out.
-                break
 
-            issues += result['issues']
-            start_id += len(result['issues'])
+        result = json.loads(response.read())
+        if not result['issues']:
+            # Check to see if there is issues to process if not break out.
+            break
+
+        issues += result['issues']
+        start_id += len(result['issues'])
 
     return issues
 
