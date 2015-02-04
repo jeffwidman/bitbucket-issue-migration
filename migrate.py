@@ -217,7 +217,7 @@ def run():
     options = read_arguments()
 
     handler_cls = SubmitHandler if not options.dry_run else DryRunHandler
-    handler = handler_cls(bb_url)
+    handler = handler_cls(options)
     handler.run()
 
 
