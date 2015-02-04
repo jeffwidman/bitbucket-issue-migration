@@ -40,6 +40,7 @@ except ImportError:
 
 from six import text_type
 from six.moves import urllib
+from jaraco.functools import compose
 
 
 def read_arguments():
@@ -157,10 +158,6 @@ def clean_body(body):
     return "\n".join(lines)
 
 
-def get_issues(bb_url, start_id):
-    return list(_iter_issues(bb_url, start_id))
-
-
 def _iter_issues(bb_url, start_id):
     '''
     Fetch the issues from Bitbucket, one page at a time.
@@ -184,6 +181,9 @@ def _iter_issues(bb_url, start_id):
 
     next_start = start_id + len(result['issues'])
     return itertools.chain(result['issues'], _iter_issues(bb_url, next_start))
+
+
+get_issues = compose(list, _iter_issues)
 
 
 def get_comments(bb_url, issue):
