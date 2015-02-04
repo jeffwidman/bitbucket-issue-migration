@@ -179,7 +179,7 @@ def _parse_comment(comment):
     return dict(
         user=format_user(comment['author_info']),
         created_at=comment['utc_created_on'],
-        body=comment['content'].encode('utf-8'),
+        body=comment['content'],
         number=comment['comment_id'],
     )
 
@@ -257,7 +257,7 @@ class SubmitHandler(Handler):
 
     def handle(self, issue):
         comments = self.get_comments(issue)
-        body = format_body(self.options, issue).encode('utf-8')
+        body = format_body(self.options, issue)
         self.push_issue(issue, body, comments)
         print("Created", self.issues.count, "issues")
 
@@ -331,8 +331,8 @@ class SubmitHandler(Handler):
 class DryRunHandler(Handler):
     def handle(self, issue):
         comments = self.get_comments(issue)
-        body = format_body(self.options, issue).encode('utf-8')
-        print("Title: {}".format(issue.get('title').encode('utf-8')))
+        body = format_body(self.options, issue)
+        print("Title: {}".format(issue.get('title')))
         print("Body: {}".format(body))
         list(map(format_comment, comments))
         print("Comments", [comment['body'] for comment in comments])
