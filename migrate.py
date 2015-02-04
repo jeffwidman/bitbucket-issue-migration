@@ -332,7 +332,7 @@ class SubmitHandler(Handler):
         body = format_body(self.options, issue).encode('utf-8')
         push_issue(self.github, self.options.github_repo, issue, body,
             comments)
-        print("Created {} issues".format(self.issues.count))
+        print("Created", self.issues.count, "issues")
 
 
 class DryRunHandler(Handler):
