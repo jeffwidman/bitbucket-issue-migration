@@ -189,7 +189,8 @@ def get_comments(bb_url, issue):
         issue['local_id']
     )
     result = json.loads(urllib2.urlopen(url).read())
-    ordered = sorted(result, key=lambda comment: comment["utc_created_on"])
+    by_creation_date = lambda comment: comment["utc_created_on"]
+    ordered = sorted(result, key=by_creation_date)
 
     comments = []
     for comment in ordered:
