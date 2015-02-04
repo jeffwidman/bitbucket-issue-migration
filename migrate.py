@@ -24,7 +24,7 @@ import getpass
 import operator
 import itertools
 
-from pygithub3 import Github
+import github
 
 try:
     import keyring
@@ -247,7 +247,7 @@ class SubmitHandler(Handler):
             keyring.get_password('Github', self.options.github_username) or
             getpass.getpass("Please enter your GitHub password\n")
         )
-        self.github = Github(
+        self.github = github.Github(
             login=self.options.github_username,
             password=github_password,
         )
