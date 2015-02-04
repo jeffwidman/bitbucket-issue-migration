@@ -156,7 +156,6 @@ def clean_body(body):
     return "\n".join(lines)
 
 
-# Bitbucket fetch
 def get_issues(bb_url, start_id):
     '''
     Fetch the issues from Bitbucket
