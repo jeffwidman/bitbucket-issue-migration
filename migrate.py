@@ -192,22 +192,22 @@ def get_comments(bb_url, issue):
     result = json.loads(urllib2.urlopen(url).read())
     by_creation_date = operator.itemgetter("utc_created_on")
     ordered = sorted(result, key=by_creation_date)
+    # filter only those that have content; status comments (assigned,
+    # version, etc.) have no body
+    filtered = filter(operator.itemgetter('content'), ordered)
+    return list(map(_parse_comment, filtered))
 
-    comments = []
-    for comment in ordered:
-        body = comment['content'] or ''
 
-        # Status comments (assigned, version, etc. changes) have in bitbucket
-        # no body
-        if body:
-            comments.append({
-                'user': format_user(comment['author_info']),
-                'created_at': comment['utc_created_on'],
-                'body': body.encode('utf-8'),
-                'number': comment['comment_id']
-            })
-
-    return comments
+def _parse_comment(comment):
+	"""
+	Parse a comment as returned from Bitbucket API.
+	"""
+	return dict(
+		user=format_user(comment['author_info']),
+		created_at=comment['utc_created_on'],
+		body=comment['content'].encode('utf-8'),
+		number=comment['comment_id'],
+	)
 
 
 # GitHub push
