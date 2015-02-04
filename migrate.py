@@ -190,7 +190,7 @@ class Handler(object):
 
     def __init__(self, options):
         self.options = options
-        self.bb_url = self.bb_tmpl.format(vars(options))
+        self.bb_url = self.bb_tmpl.format(**vars(options))
 
     @classmethod
     def best(cls):
