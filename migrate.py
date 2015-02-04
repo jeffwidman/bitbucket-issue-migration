@@ -299,6 +299,7 @@ if __name__ == "__main__":
             print("Body: {}".format(
                 format_body(options, issue).encode('utf-8')
             ))
+            list(map(format_comment, comments))
             print("Comments", [comment['body'] for comment in comments])
         else:
             body = format_body(options, issue).encode('utf-8')
