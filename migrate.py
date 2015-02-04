@@ -234,10 +234,12 @@ class Handler(object):
         result = json.loads(response.read().decode('utf-8'))
         if not result['issues']:
             # No issues encountered at or above start_id
-            return result['issues']
+            raise StopIteration()
 
         next_start = start_id + len(result['issues'])
-        return itertools.chain(result['issues'], self._iter_issues(next_start))
+        res = itertools.chain(result['issues'], self._iter_issues(next_start))
+        for item in res:
+            yield item
 
 
 class SubmitHandler(Handler):
