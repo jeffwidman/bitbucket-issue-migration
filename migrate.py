@@ -108,7 +108,7 @@ def format_name(issue):
 
 
 def format_body(options, issue):
-    content = clean_body(issue.get('content'))
+    content = clean_body(issue['content'])
     return """{}
 
 {}
@@ -276,7 +276,7 @@ class SubmitHandler(Handler):
         )
 
         # Set the status and labels
-        if issue.get('status') == 'resolved':
+        if issue['status'] == 'resolved':
             self.github.issues.update(
                 new_issue.number,
                 {'state': 'closed'},
@@ -287,15 +287,15 @@ class SubmitHandler(Handler):
         # Everything else is done with labels in github
         # TODO: there seems to be a problem with the add_to_issue method of
         #       pygithub3, so it's not possible to assign labels to issues
-        elif issue.get('status') == 'wontfix':
+        elif issue['status'] == 'wontfix':
             pass
-        elif issue.get('status') == 'on hold':
+        elif issue['status'] == 'on hold':
             pass
-        elif issue.get('status') == 'invalid':
+        elif issue['status'] == 'invalid':
             pass
-        elif issue.get('status') == 'duplicate':
+        elif issue['status'] == 'duplicate':
             pass
-        elif issue.get('status') == 'wontfix':
+        elif issue['status'] == 'wontfix':
             pass
 
         # github.issues.labels.add_to_issue(
@@ -332,7 +332,7 @@ class DryRunHandler(Handler):
     def handle(self, issue):
         comments = self.get_comments(issue)
         body = format_body(self.options, issue)
-        print("Title: {}".format(issue.get('title')))
+        print("Title: {}".format(issue['title']))
         print("Body: {}".format(body))
         list(map(format_comment, comments))
         print("Comments", [comment['body'] for comment in comments])
