@@ -217,7 +217,7 @@ def push_issue(github, repo_path, issue, body, comments):
     # Create the issue
     gh_username, sep, gh_repository = repo_path.partition('/')
     issue_data = {
-        'title': issue['title'].encode('utf-8'),
+        'title': issue['title'],
         'body': body
     }
     new_issue = github.issues.create(
