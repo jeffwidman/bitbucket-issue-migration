@@ -338,10 +338,9 @@ class SubmitHandler(Handler):
 class DryRunHandler(Handler):
     def handle(self, issue):
         comments = self.get_comments(issue)
+        body = format_body(self.options, issue).encode('utf-8')
         print("Title: {}".format(issue.get('title').encode('utf-8')))
-        print("Body: {}".format(
-            format_body(self.options, issue).encode('utf-8')
-        ))
+        print("Body: {}".format(body))
         list(map(format_comment, comments))
         print("Comments", [comment['body'] for comment in comments])
 
