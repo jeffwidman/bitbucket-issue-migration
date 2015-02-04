@@ -41,6 +41,7 @@ except ImportError:
 from six import text_type
 from six.moves import urllib
 from jaraco.functools import compose
+from jaraco.itertools import Counter
 
 
 def read_arguments():
@@ -281,37 +282,68 @@ def push_issue(github, repo_path, issue, body, comments):
 
 def run():
     options = read_arguments()
-    bb_url = "https://api.bitbucket.org/1.0/repositories/{}/{}/issues".format(
-        options.bitbucket_username,
-        options.bitbucket_repo
-    )
 
-    # fetch issues from Bitbucket
-    issues = get_issues(bb_url, options.start)
+    handler_cls = SubmitHandler if not options.dry_run else DryRunHandler
+    handler = handler_cls(bb_url)
+    handler.run()
 
-    # push them in GitHub (issues comments are fetched here)
-    github_password = (
-        keyring.get_password('Github', options.github_username) or
-        getpass.getpass("Please enter your GitHub password\n")
-    )
-    github = Github(login=options.github_username, password=github_password)
 
-    # Sort issues, to sync issue numbers on freshly created GitHub projects.
-    # Note: not memory efficient, could use too much memory on large projects.
-    for issue in sorted(issues, key=lambda issue: issue['local_id']):
-        comments = get_comments(bb_url, issue)
+class Handler(object):
+    bb_base = "https://api.bitbucket.org/1.0/repositories/"
+    bb_tmpl = bb_base + "{bitbucket_username}/{bitbucket_repo}/issues"
 
-        if options.dry_run:
-            print("Title: {}".format(issue.get('title').encode('utf-8')))
-            print("Body: {}".format(
-                format_body(options, issue).encode('utf-8')
-            ))
-            list(map(format_comment, comments))
-            print("Comments", [comment['body'] for comment in comments])
-        else:
-            body = format_body(options, issue).encode('utf-8')
-            push_issue(github, options.github_repo, issue, body, comments)
-            print("Created {} issues".format(len(issues)))
+    def __init__(self, options):
+        self.options = options
+        self.bb_url = self.bb_tmpl.format(vars(options))
+
+    def get_issues(self):
+        issues = get_issues(self.bb_url, self.options.start)
+        # In order to sync issue numbers on a freshly-created Github project,
+        # sort the issues by local_id
+        # Note: not memory efficient and could use too much memory on large
+        # projects.
+        by_local_id = operator.itemgetter('local_id')
+        return sorted(issues, key=by_local_id)
+
+    def run(self):
+        self.issues = Counter(self.get_issues)
+        for issue in self.issues:
+            self.handle(issue)
+
+    def get_comments(self, issue):
+        return get_comments(self.bb_url, issue)
+
+
+class SubmitHandler(Handler):
+    def run(self):
+        # push them in GitHub (issues comments are fetched here)
+        github_password = (
+            keyring.get_password('Github', self.options.github_username) or
+            getpass.getpass("Please enter your GitHub password\n")
+        )
+        self.github = Github(
+            login=self.options.github_username,
+            password=github_password,
+        )
+        return super(SubmitHandler, self).run()
+
+    def handle(self, issue):
+        comments = self.get_comments(issue)
+        body = format_body(self.options, issue).encode('utf-8')
+        push_issue(self.github, self.options.github_repo, issue, body,
+            comments)
+        print("Created {} issues".format(self.issues.count))
+
+
+class DryRunHandler(Handler):
+    def handle(self, issue):
+        comments = self.get_comments(issue)
+        print("Title: {}".format(issue.get('title').encode('utf-8')))
+        print("Body: {}".format(
+            format_body(self.options, issue).encode('utf-8')
+        ))
+        list(map(format_comment, comments))
+        print("Comments", [comment['body'] for comment in comments])
 
 
 if __name__ == "__main__":

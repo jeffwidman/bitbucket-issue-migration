@@ -1,3 +1,4 @@
 pygithub3
 six
 jaraco.functools
+jaraco.itertools>=1.1
