@@ -215,6 +215,7 @@ def _parse_comment(comment):
 # GitHub push
 def push_issue(gh_username, gh_repository, issue, body, comments):
     # Create the issue
+    global github
     issue_data = {
         'title': issue.get('title').encode('utf-8'),
         'body': body
@@ -278,7 +279,10 @@ def push_issue(gh_username, gh_repository, issue, body, comments):
     ))
 
 
-if __name__ == "__main__":
+github = None
+
+def run():
+    global github
     options = read_arguments()
     bb_url = "https://api.bitbucket.org/1.0/repositories/{}/{}/issues".format(
         options.bitbucket_username,
@@ -312,3 +316,7 @@ if __name__ == "__main__":
             body = format_body(options, issue).encode('utf-8')
             push_issue(gh_username, gh_repository, issue, body, comments)
             print("Created {} issues".format(len(issues)))
+
+
+if __name__ == "__main__":
+    run()
