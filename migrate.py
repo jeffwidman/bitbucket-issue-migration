@@ -164,10 +164,7 @@ def get_issues(bb_url, start_id):
     issues = []
 
     while True:
-        url = "{}/?start={}".format(
-            bb_url,
-            start_id
-        )
+        url = "{bb_url}/?start={start_id}".format(**locals())
 
         try:
             response = urllib.request.urlopen(url)
