@@ -22,6 +22,7 @@ from __future__ import print_function
 import argparse
 import urllib2
 import getpass
+import operator
 
 from pygithub3 import Github
 
@@ -189,7 +190,7 @@ def get_comments(bb_url, issue):
         issue['local_id']
     )
     result = json.loads(urllib2.urlopen(url).read())
-    by_creation_date = lambda comment: comment["utc_created_on"]
+    by_creation_date = operator.itemgetter("utc_created_on")
     ordered = sorted(result, key=by_creation_date)
 
     comments = []
