@@ -133,7 +133,7 @@ Original comment by: {}
 """.format(
         comment['body'],
         '-' * 40,
-        comment['user'].encode('utf-8')
+        comment['user'],
     )
 
 
