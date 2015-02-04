@@ -285,8 +285,6 @@ class SubmitHandler(Handler):
             pass
         elif issue['status'] == 'duplicate':
             pass
-        elif issue['status'] == 'wontfix':
-            pass
 
         # Milestones
 
