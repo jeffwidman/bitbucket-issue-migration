@@ -17,6 +17,7 @@
 # along with the bitbucket issue migration script.
 # If not, see <http://www.gnu.org/licenses/>.
 
+from __future__ import print_function
 
 import argparse
 import urllib2
@@ -268,9 +269,9 @@ def push_issue(gh_username, gh_repository, issue, body, comments):
             gh_repository
         )
 
-    print u"Created: {} [{} comments]".format(
+    print(u"Created: {} [{} comments]".format(
         issue['title'], len(comments)
-    )
+    ))
 
 
 if __name__ == "__main__":
@@ -294,12 +295,12 @@ if __name__ == "__main__":
         comments = get_comments(bb_url, issue)
 
         if options.dry_run:
-            print "Title: {}".format(issue.get('title').encode('utf-8'))
-            print "Body: {}".format(
+            print("Title: {}".format(issue.get('title').encode('utf-8')))
+            print("Body: {}".format(
                 format_body(options, issue).encode('utf-8')
-            )
-            print "Comments", [comment['body'] for comment in comments]
+            ))
+            print("Comments", [comment['body'] for comment in comments])
         else:
             body = format_body(options, issue).encode('utf-8')
             push_issue(gh_username, gh_repository, issue, body, comments)
-            print "Created {} issues".format(len(issues))
+            print("Created {} issues".format(len(issues)))
