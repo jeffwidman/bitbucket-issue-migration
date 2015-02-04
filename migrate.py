@@ -213,73 +213,6 @@ def _parse_comment(comment):
     )
 
 
-# GitHub push
-def push_issue(github, repo_path, issue, body, comments):
-    # Create the issue
-    gh_username, sep, gh_repository = repo_path.partition('/')
-    issue_data = {
-        'title': issue['title'],
-        'body': body
-    }
-    new_issue = github.issues.create(
-        issue_data,
-        gh_username,
-        gh_repository
-    )
-
-    # Set the status and labels
-    if issue.get('status') == 'resolved':
-        github.issues.update(
-            new_issue.number,
-            {'state': 'closed'},
-            user=gh_username,
-            repo=gh_repository
-        )
-
-    # Everything else is done with labels in github
-    # TODO: there seems to be a problem with the add_to_issue method of
-    #       pygithub3, so it's not possible to assign labels to issues
-    elif issue.get('status') == 'wontfix':
-        pass
-    elif issue.get('status') == 'on hold':
-        pass
-    elif issue.get('status') == 'invalid':
-        pass
-    elif issue.get('status') == 'duplicate':
-        pass
-    elif issue.get('status') == 'wontfix':
-        pass
-
-    # github.issues.labels.add_to_issue(
-    #     new_issue.number,
-    #     issue['metadata']['kind'],
-    #     user=gh_username,
-    #     repo=gh_repository
-    # )
-
-    # github.issues.labels.add_to_issue(
-    #     new_issue.number,
-    #     gh_username,
-    #     gh_repository,
-    #     ('import',)
-    # )
-
-    # Milestones
-
-    # Add the comments
-    for comment in comments:
-        github.issues.comments.create(
-            new_issue.number,
-            format_comment(comment),
-            gh_username,
-            gh_repository
-        )
-
-    print("Created: {} [{} comments]".format(
-        issue['title'], len(comments)
-    ))
-
-
 def run():
     options = read_arguments()
 
@@ -330,9 +263,74 @@ class SubmitHandler(Handler):
     def handle(self, issue):
         comments = self.get_comments(issue)
         body = format_body(self.options, issue).encode('utf-8')
-        push_issue(self.github, self.options.github_repo, issue, body,
-            comments)
+        self.push_issue(issue, body, comments)
         print("Created", self.issues.count, "issues")
+
+    def push_issue(self, issue, body, comments):
+        # Create the issue
+        repo_path = self.options.github_repo
+        gh_username, sep, gh_repository = repo_path.partition('/')
+        issue_data = {
+            'title': issue['title'],
+            'body': body
+        }
+        new_issue = self.github.issues.create(
+            issue_data,
+            gh_username,
+            gh_repository
+        )
+
+        # Set the status and labels
+        if issue.get('status') == 'resolved':
+            self.github.issues.update(
+                new_issue.number,
+                {'state': 'closed'},
+                user=gh_username,
+                repo=gh_repository
+            )
+
+        # Everything else is done with labels in github
+        # TODO: there seems to be a problem with the add_to_issue method of
+        #       pygithub3, so it's not possible to assign labels to issues
+        elif issue.get('status') == 'wontfix':
+            pass
+        elif issue.get('status') == 'on hold':
+            pass
+        elif issue.get('status') == 'invalid':
+            pass
+        elif issue.get('status') == 'duplicate':
+            pass
+        elif issue.get('status') == 'wontfix':
+            pass
+
+        # github.issues.labels.add_to_issue(
+        #     new_issue.number,
+        #     issue['metadata']['kind'],
+        #     user=gh_username,
+        #     repo=gh_repository
+        # )
+
+        # github.issues.labels.add_to_issue(
+        #     new_issue.number,
+        #     gh_username,
+        #     gh_repository,
+        #     ('import',)
+        # )
+
+        # Milestones
+
+        # Add the comments
+        for comment in comments:
+            self.github.issues.comments.create(
+                new_issue.number,
+                format_comment(comment),
+                gh_username,
+                gh_repository
+            )
+
+        print("Created: {} [{} comments]".format(
+            issue['title'], len(comments)
+        ))
 
 
 class DryRunHandler(Handler):
