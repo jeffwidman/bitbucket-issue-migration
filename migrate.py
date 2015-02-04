@@ -17,7 +17,7 @@
 # along with the bitbucket issue migration script.
 # If not, see <http://www.gnu.org/licenses/>.
 
-from __future__ import print_function
+from __future__ import print_function, unicode_literals
 
 import argparse
 import getpass
@@ -109,7 +109,7 @@ def format_name(issue):
 
 def format_body(options, issue):
     content = clean_body(issue.get('content'))
-    return u"""{}
+    return """{}
 
 {}
 - Bitbucket: https://bitbucket.org/{}/{}/issue/{}
@@ -125,7 +125,7 @@ def format_body(options, issue):
 
 
 def format_comment(comment):
-    return u"""{}
+    return """{}
 
 {}
 Original comment by: {}
@@ -273,7 +273,7 @@ def push_issue(gh_username, gh_repository, issue, body, comments):
             gh_repository
         )
 
-    print(u"Created: {} [{} comments]".format(
+    print("Created: {} [{} comments]".format(
         issue['title'], len(comments)
     ))
 
