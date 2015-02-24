@@ -211,6 +211,7 @@ class Handler(object):
         self.issues = Counter(self.get_issues())
         for issue in self.issues:
             self.handle(issue)
+        print("Created", self.issues.count, "issues")
 
     def get_comments(self, issue):
         return get_comments(self.bb_url, issue)
@@ -259,7 +260,6 @@ class SubmitHandler(Handler):
         comments = self.get_comments(issue)
         body = format_body(self.options, issue)
         self.push_issue(issue, body, comments)
-        print("Created", self.issues.count, "issues")
 
     def push_issue(self, issue, body, comments):
         # Create the issue
