@@ -277,13 +277,13 @@ class SubmitHandler(Handler):
 
         # Everything else is done with labels in github
         elif issue['status'] == 'wontfix':
-            pass
+            new_issue.edit(state='closed')
         elif issue['status'] == 'on hold':
             pass
         elif issue['status'] == 'invalid':
-            pass
+            new_issue.edit(state='closed')
         elif issue['status'] == 'duplicate':
-            pass
+            new_issue.edit(state='closed')
 
         # Milestones
 
