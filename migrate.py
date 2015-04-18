@@ -275,7 +275,7 @@ def push_issue(gh_username, gh_repository, issue, body, comments):
 
 if __name__ == "__main__":
     options = read_arguments()
-    bb_url = "https://api.bitbucket.org/1.0/repositories/{}/{}/issues".format(
+    bb_url = "https://bitbucket.org/api/1.0/repositories/{}/{}/issues".format(
         options.bitbucket_username,
         options.bitbucket_repo
     )
