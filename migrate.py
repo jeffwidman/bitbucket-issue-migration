@@ -24,10 +24,7 @@ import getpass
 
 from pygithub3 import Github
 
-try:
-    import json
-except ImportError:
-    import simplejson as json
+import json
 
 
 def read_arguments():
@@ -83,7 +80,7 @@ def format_user(author_info):
 
     if 'username' in author_info:
         return '[{0}](http://bitbucket.org/{0})'.format(
-            author_info['username']
+            author_info['username'].encode('utf-8')
         )
 
 
@@ -119,7 +116,7 @@ Original comment by: {}
 """.format(
         comment['body'],
         '-' * 40,
-        comment['user'].encode('utf-8')
+        comment['user'],
     )
 
 
@@ -187,7 +184,7 @@ def get_comments(bb_url, issue):
         bb_url,
         issue['local_id']
     )
-    result = json.loads(urllib2.urlopen(url).read())
+    result = json.loads(urllib2.urlopen(url).read(), encoding='utf-8')
     ordered = sorted(result, key=lambda comment: comment["utc_created_on"])
 
     comments = []
@@ -200,7 +197,7 @@ def get_comments(bb_url, issue):
             comments.append({
                 'user': format_user(comment['author_info']),
                 'created_at': comment['utc_created_on'],
-                'body': body.encode('utf-8'),
+                'body': body,
                 'number': comment['comment_id']
             })
 
@@ -280,17 +277,21 @@ if __name__ == "__main__":
         options.bitbucket_repo
     )
 
+    # ask for password so the user doesn't have to sit around waiting
+    # to provide some initial input
+    github_password = getpass.getpass("Please enter your GitHub password\n")
+
     # fetch issues from Bitbucket
     issues = get_issues(bb_url, options.start)
 
     # push them in GitHub (issues comments are fetched here)
-    github_password = getpass.getpass("Please enter your GitHub password\n")
     github = Github(login=options.github_username, password=github_password)
     gh_username, gh_repository = options.github_repo.split('/')
 
     # Sort issues, to sync issue numbers on freshly created GitHub projects.
     # Note: not memory efficient, could use too much memory on large projects.
-    for issue in sorted(issues, key=lambda issue: issue['local_id']):
+    issues = sorted(issues, key=lambda issue: issue['local_id'])
+    for index, issue in enumerate(issues):
         comments = get_comments(bb_url, issue)
 
         if options.dry_run:
@@ -302,4 +303,4 @@ if __name__ == "__main__":
         else:
             body = format_body(options, issue).encode('utf-8')
             push_issue(gh_username, gh_repository, issue, body, comments)
-            print "Created {} issues".format(len(issues))
+            print "Created {} of {} issues".format(index + 1, len(issues))
