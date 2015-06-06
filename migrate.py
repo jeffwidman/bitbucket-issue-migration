@@ -106,19 +106,24 @@ def format_name(issue):
 
 
 def format_body(options, issue):
-    content = clean_body(issue['content'])
-    return """{}
+    content = clean_body(issue.get('content'))
+    return """Originally reported by: **{reporter}**
+Originally created at: **{created}**
 
-{}
-- Bitbucket: https://bitbucket.org/{}/{}/issue/{}
-- Originally reported by: {}
-- Originally created at: {}
+{sep}
+
+{content}
+
+{sep}
+- Bitbucket: https://bitbucket.org/{user}/{repo}/issue/{id}
 """.format(
-        content,
-        '-' * 40,
-        options.bitbucket_username, options.bitbucket_repo, issue['local_id'],
-        format_name(issue),
-        issue['created_on']
+        reporter=format_name(issue),
+        sep='-' * 40,
+        content=content,
+        user=options.bitbucket_username,
+        repo=options.bitbucket_repo,
+        id=issue['local_id'],
+        created=issue['created_on'],
     )
 
 
