@@ -98,6 +98,7 @@ def format_name(issue):
 
 def format_body(options, issue):
     content = clean_body(issue.get('content'))
+    content = fix_links(options, content)
     return u"""Originally reported by: **{reporter}**
 
 {sep}
@@ -116,7 +117,7 @@ def format_body(options, issue):
     )
 
 
-def format_comment(comment):
+def format_comment(options, comment):
     return u"""*Original comment by* **{}**:
 
 {}
@@ -124,8 +125,18 @@ def format_comment(comment):
 """.format(
         comment['user'],
         '-' * 40,
-        clean_comment(comment['body']),
+        fix_links(options, clean_comment(comment['body'])),
     )
+
+
+def fix_links(options, content):
+    """
+    Fix explicit links found in the body of a comment or issue to use
+    relative links ("#<id>").
+    """
+    pattern = r'https://bitbucket.org/{user}/{repo}/issue/(\d+)'.format(
+        user=options.bitbucket_username, repo=options.bitbucket_repo)
+    return re.sub(pattern, r'#\1', content)
 
 
 def format_date(bb_date):
@@ -252,7 +263,7 @@ def get_comments(bb_url, issue):
 
 
 # GitHub push
-def push_issue(auth, gh_username, gh_repository, issue, body, comments):
+def push_issue(auth, gh_username, gh_repository, issue, body, comments, options):
     # Using the normal Issue API to import all issues will easily generate
     # an HTTP error, as explained by GitHub support:
     #   Creating issues and
@@ -264,8 +275,10 @@ def push_issue(auth, gh_username, gh_repository, issue, body, comments):
     # https://github.com/nicoddemus/bitbucket_issue_migration/issues/1
 
     comments_data = [
-        {'body': format_comment(x), 'created_at': format_date(x['created_at'])}
-        for x in comments]
+        {
+            'body': format_comment(options, x),
+            'created_at': format_date(x['created_at']),
+        } for x in comments]
 
     issue_data = {
         'issue': {
@@ -331,5 +344,6 @@ if __name__ == "__main__":
             print "Comments", [comment['body'] for comment in comments]
         else:
             body = format_body(options, issue)
-            push_issue(auth, gh_username, gh_repository, issue, body, comments)
+            push_issue(auth, gh_username, gh_repository, issue, body,
+                       comments, options)
             print "Created {} of {} issues".format(index + 1, len(issues))
