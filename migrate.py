@@ -143,8 +143,18 @@ def format_comment(comment):
 """.format(
         comment['user'],
         '-' * 40,
-        clean_comment(comment['body']),
+        fix_links(options, clean_comment(comment['body'])),
     )
+
+
+def fix_links(options, content):
+    """
+    Fix explicit links found in the body of a comment or issue to use
+    relative links ("#<id>").
+    """
+    pattern = r'https://bitbucket.org/{user}/{repo}/issue/(\d+)'.format(
+        user=options.bitbucket_username, repo=options.bitbucket_repo)
+    return re.sub(pattern, r'#\1', content)
 
 
 def format_date(bb_date):
