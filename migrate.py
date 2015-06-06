@@ -133,7 +133,7 @@ def format_comment(comment):
 {}
 Original comment by: {}
 """.format(
-        comment['body'],
+        clean_comment(comment['body']),
         '-' * 40,
         comment['user'],
     )
@@ -175,7 +175,29 @@ def clean_body(body):
                 lines.append("    " + line)
             else:
                 lines.append(line.replace("{{{", "`").replace("}}}", "`"))
+
+    clean_changesets(lines)
     return "\n".join(lines)
+
+
+def clean_comment(body):
+    lines = body.splitlines()
+    clean_changesets(lines)
+    return "\n".join(lines)
+
+
+def clean_changesets(lines):
+    """
+    Clean changeset references like:
+
+        → <<cset 22f3981d50c8>>'
+
+    Since they point to mercurial changesets and there's no easy way to map them
+    to git hashes, better to remove them altogether.
+    """
+    for index, line in reversed(list(enumerate(lines))):
+        if line.startswith(u'→ <<cset'):
+            lines.pop(index)
 
 
 def get_comments(bb_url, issue):
