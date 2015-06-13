@@ -77,11 +77,13 @@ def format_user(author_info):
         result = u" ".join([author_info['first_name'], author_info['last_name']])
 
     if author_info and 'username' in author_info:
-        link = '[{0}](http://bitbucket.org/{0})'.format(author_info['username'])
+        link1 = '[{0}](http://bitbucket.org/{0})'.format(author_info['username'])
+        link2 = '[{0}](http://github.com/{0})'.format(author_info['username'])
+        links = 'BitBucket: {}, GitHub: {}'.format(link1, link2)
         if result:
-            result += ' ({})'.format(link)
+            result += ' ({})'.format(links)
         else:
-            result = link
+            result = links
 
     if not result:
         result = "Anonymous"
