@@ -339,11 +339,11 @@ if __name__ == "__main__":
         comments = get_comments(bb_url, issue)
 
         if options.dry_run:
-            print "Title: {}".format(issue.get('title'))
-            print "Body: {}".format(
+            print u"Title: {}".format(issue.get('title'))
+            print u"Body: {}".format(
                 format_body(options, issue)
             )
-            print "Comments", [comment['body'] for comment in comments]
+            print u"Comments", [comment['body'].encode('utf-8', errors='replace') for comment in comments]
         else:
             body = format_body(options, issue)
             push_issue(auth, gh_username, gh_repository, issue, body,
