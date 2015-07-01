@@ -263,8 +263,8 @@ class SubmitHandler(Handler):
         body = format_body(self.options, issue)
         self.push_issue(issue, body, comments)
 
-    # only allow one every 10 seconds to avoid hitting rate limits
-    @functools.partial(Throttler, max_rate=1/10)
+    # only allow one every 15 seconds to avoid hitting rate limits
+    @functools.partial(Throttler, max_rate=1/15)
     def push_issue(self, issue, body, comments):
         # Create the issue
         repo_path = self.options.github_repo
