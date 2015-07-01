@@ -23,6 +23,7 @@ import argparse
 import getpass
 import operator
 import itertools
+import functools
 
 import github
 
@@ -41,6 +42,7 @@ except ImportError:
 from six import text_type
 from six.moves import urllib
 from jaraco.itertools import Counter
+from jaraco.functools import Throttler
 
 
 def read_arguments():
@@ -261,6 +263,8 @@ class SubmitHandler(Handler):
         body = format_body(self.options, issue)
         self.push_issue(issue, body, comments)
 
+    # only allow one every 10 seconds to avoid hitting rate limits
+    @functools.partial(Throttler, max_rate=1/10)
     def push_issue(self, issue, body, comments):
         # Create the issue
         repo_path = self.options.github_repo
