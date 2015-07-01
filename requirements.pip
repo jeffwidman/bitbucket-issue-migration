@@ -1,3 +1,4 @@
-pygithub>=1.25.3
+pygithub>=1.25.2
 six
 jaraco.itertools>=1.1
+keyring
