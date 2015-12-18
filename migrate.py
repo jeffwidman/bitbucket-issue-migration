@@ -21,13 +21,10 @@
 import argparse
 import urllib2
 import getpass
+import json
 
-from pygithub3 import Github
-
-try:
-    import json
-except ImportError:
-    import simplejson as json
+import re
+import requests
 
 
 def read_arguments():
@@ -75,16 +72,23 @@ def read_arguments():
 
 # Formatters
 def format_user(author_info):
-    if not author_info:
-        return "Anonymous"
+    result = ''
+    if author_info and author_info['first_name'] and author_info['last_name']:
+        result = u" ".join([author_info['first_name'], author_info['last_name']])
 
-    if author_info['first_name'] and author_info['last_name']:
-        return " ".join([author_info['first_name'], author_info['last_name']])
+    if author_info and 'username' in author_info:
+        link1 = '[{0}](http://bitbucket.org/{0})'.format(author_info['username'])
+        link2 = '[{0}](http://github.com/{0})'.format(author_info['username'])
+        links = 'BitBucket: {}, GitHub: {}'.format(link1, link2)
+        if result:
+            result += ' ({})'.format(links)
+        else:
+            result = links
 
-    if 'username' in author_info:
-        return '[{0}](http://bitbucket.org/{0})'.format(
-            author_info['username']
-        )
+    if not result:
+        result = "Anonymous"
+
+    return result
 
 
 def format_name(issue):
@@ -96,31 +100,62 @@ def format_name(issue):
 
 def format_body(options, issue):
     content = clean_body(issue.get('content'))
-    return u"""{}
+    content = fix_links(options, content)
+    return u"""Originally reported by: **{reporter}**
 
-{}
-- Bitbucket: https://bitbucket.org/{}/{}/issue/{}
-- Originally reported by: {}
-- Originally created at: {}
+{sep}
+
+{content}
+
+{sep}
+- Bitbucket: https://bitbucket.org/{user}/{repo}/issue/{id}
 """.format(
-        content,
-        '-' * 40,
-        options.bitbucket_username, options.bitbucket_repo, issue['local_id'],
-        format_name(issue),
-        issue['created_on']
+        reporter=format_name(issue),
+        sep='-' * 40,
+        content=content,
+        user=options.bitbucket_username,
+        repo=options.bitbucket_repo,
+        id=issue['local_id'],
     )
 
 
-def format_comment(comment):
-    return u"""{}
+def format_comment(options, comment):
+    return u"""*Original comment by* **{}**:
 
 {}
-Original comment by: {}
+{}
 """.format(
-        comment['body'],
+        comment['user'],
         '-' * 40,
-        comment['user'].encode('utf-8')
+        fix_links(options, clean_comment(comment['body'])),
     )
+
+
+def fix_links(options, content):
+    """
+    Fix explicit links found in the body of a comment or issue to use
+    relative links ("#<id>").
+    """
+    pattern = r'https://bitbucket.org/{user}/{repo}/issue/(\d+)'.format(
+        user=options.bitbucket_username, repo=options.bitbucket_repo)
+    return re.sub(pattern, r'#\1', content)
+
+
+def format_date(bb_date):
+    """
+    Convert from one of the various date formats used by BitBucket to
+    the one supported by GitHub.
+    """
+    # u'2010-10-12T13:14:44.584'
+    m = re.search(r'(\d\d\d\d-\d\d-\d\d)T(\d\d:\d\d:\d\d)', bb_date)
+    if m:
+        return '{}T{}Z'.format(m.group(1), m.group(2))
+    # u'2012-11-26 09:59:39+00:00'
+    m = re.search(r'(\d\d\d\d-\d\d-\d\d) (\d\d:\d\d:\d\d)', bb_date)
+    if m:
+        return '{}T{}Z'.format(m.group(1), m.group(2))
+
+    raise RuntimeError('Could not parse date: {}'.format(bb_date))
 
 
 def clean_body(body):
@@ -142,7 +177,29 @@ def clean_body(body):
                 lines.append("    " + line)
             else:
                 lines.append(line.replace("{{{", "`").replace("}}}", "`"))
-    return "\n".join(lines)
+
+    clean_changesets(lines)
+    return u"\n".join(lines)
+
+
+def clean_comment(body):
+    lines = body.splitlines()
+    clean_changesets(lines)
+    return u"\n".join(lines)
+
+
+def clean_changesets(lines):
+    """
+    Clean changeset references like:
+
+        → <<cset 22f3981d50c8>>'
+
+    Since they point to mercurial changesets and there's no easy way to map them
+    to git hashes, better to remove them altogether.
+    """
+    for index, line in reversed(list(enumerate(lines))):
+        if line.startswith(u'→ <<cset'):
+            lines.pop(index)
 
 
 # Bitbucket fetch
@@ -187,7 +244,7 @@ def get_comments(bb_url, issue):
         bb_url,
         issue['local_id']
     )
-    result = json.loads(urllib2.urlopen(url).read())
+    result = json.loads(urllib2.urlopen(url).read(), encoding='utf-8')
     ordered = sorted(result, key=lambda comment: comment["utc_created_on"])
 
     comments = []
@@ -200,7 +257,7 @@ def get_comments(bb_url, issue):
             comments.append({
                 'user': format_user(comment['author_info']),
                 'created_at': comment['utc_created_on'],
-                'body': body.encode('utf-8'),
+                'body': body,
                 'number': comment['comment_id']
             })
 
@@ -208,69 +265,53 @@ def get_comments(bb_url, issue):
 
 
 # GitHub push
-def push_issue(gh_username, gh_repository, issue, body, comments):
-    # Create the issue
+def push_issue(auth, gh_username, gh_repository, issue, body, comments, options):
+    # Using the normal Issue API to import all issues will easily generate
+    # an HTTP error, as explained by GitHub support:
+    #   Creating issues and
+    #   comments via the API triggers email notifications just like they'd be
+    #   triggered when you create content via the Web UI. The abuse rate limit
+    #   was introduced in order to prevent spikes in notification emails which
+    #   cause problems for users and our infrastructure.
+    # This code uses the Issue Import API instead:
+    # https://github.com/nicoddemus/bitbucket_issue_migration/issues/1
+
+    comments_data = [
+        {
+            'body': format_comment(options, x),
+            'created_at': format_date(x['created_at']),
+        } for x in comments]
+
     issue_data = {
-        'title': issue.get('title').encode('utf-8'),
-        'body': body
+        'issue': {
+            'title': issue.get('title'),
+            'body': body,
+            'closed': issue.get('status') not in ('open', 'new'),
+            'created_at': format_date(issue['created_on']),
+        },
+        'comments': comments_data,
     }
-    new_issue = github.issues.create(
-        issue_data,
-        gh_username,
-        gh_repository
-    )
 
-    # Set the status and labels
-    if issue.get('status') == 'resolved':
-        github.issues.update(
-            new_issue.number,
-            {'state': 'closed'},
-            user=gh_username,
-            repo=gh_repository
+    labels = []
+    if issue['metadata']['kind']:
+        labels.append(issue['metadata']['kind'])
+    if issue['metadata']['component']:
+        labels.append(issue['metadata']['component'])
+    if labels:
+        issue_data['issue']['labels'] = labels
+
+    url = 'https://api.github.com/repos/{user}/{repo}/import/issues'.format(
+        user=gh_username, repo=gh_repository)
+    headers = {'Accept': 'application/vnd.github.golden-comet-preview+json'}
+    respo = requests.post(url, json=issue_data, auth=auth, headers=headers)
+    if respo.status_code in (200, 202):
+        print u"Created bitbucket issue {}: {} [{} comments]".format(
+            issue['local_id'],
+            issue['title'].encode('ascii', errors='replace'),
+            len(comments),
         )
-
-    # Everything else is done with labels in github
-    # TODO: there seems to be a problem with the add_to_issue method of
-    #       pygithub3, so it's not possible to assign labels to issues
-    elif issue.get('status') == 'wontfix':
-        pass
-    elif issue.get('status') == 'on hold':
-        pass
-    elif issue.get('status') == 'invalid':
-        pass
-    elif issue.get('status') == 'duplicate':
-        pass
-    elif issue.get('status') == 'wontfix':
-        pass
-
-    # github.issues.labels.add_to_issue(
-    #     new_issue.number,
-    #     issue['metadata']['kind'],
-    #     user=gh_username,
-    #     repo=gh_repository
-    # )
-
-    # github.issues.labels.add_to_issue(
-    #     new_issue.number,
-    #     gh_username,
-    #     gh_repository,
-    #     ('import',)
-    # )
-
-    # Milestones
-
-    # Add the comments
-    for comment in comments:
-        github.issues.comments.create(
-            new_issue.number,
-            format_comment(comment),
-            gh_username,
-            gh_repository
-        )
-
-    print u"Created: {} [{} comments]".format(
-        issue['title'], len(comments)
-    )
+    else:
+        raise RuntimeError(u"Failed to create issue: {}".format(issue['local_id']))
 
 
 if __name__ == "__main__":
@@ -280,26 +321,31 @@ if __name__ == "__main__":
         options.bitbucket_repo
     )
 
+    # ask for password so the user doesn't have to sit around waiting
+    # to provide some initial input
+    github_password = getpass.getpass("Please enter your GitHub password\n")
+
     # fetch issues from Bitbucket
     issues = get_issues(bb_url, options.start)
 
     # push them in GitHub (issues comments are fetched here)
-    github_password = getpass.getpass("Please enter your GitHub password\n")
-    github = Github(login=options.github_username, password=github_password)
     gh_username, gh_repository = options.github_repo.split('/')
+    auth = (gh_username, github_password)
 
     # Sort issues, to sync issue numbers on freshly created GitHub projects.
     # Note: not memory efficient, could use too much memory on large projects.
-    for issue in sorted(issues, key=lambda issue: issue['local_id']):
+    issues = sorted(issues, key=lambda issue: issue['local_id'])
+    for index, issue in enumerate(issues):
         comments = get_comments(bb_url, issue)
 
         if options.dry_run:
-            print "Title: {}".format(issue.get('title').encode('utf-8'))
-            print "Body: {}".format(
-                format_body(options, issue).encode('utf-8')
+            print u"Title: {}".format(issue.get('title'))
+            print u"Body: {}".format(
+                format_body(options, issue)
             )
-            print "Comments", [comment['body'] for comment in comments]
+            print u"Comments", [comment['body'].encode('utf-8', errors='replace') for comment in comments]
         else:
-            body = format_body(options, issue).encode('utf-8')
-            push_issue(gh_username, gh_repository, issue, body, comments)
-            print "Created {} issues".format(len(issues))
+            body = format_body(options, issue)
+            push_issue(auth, gh_username, gh_repository, issue, body,
+                       comments, options)
+            print "Created {} of {} issues".format(index + 1, len(issues))
