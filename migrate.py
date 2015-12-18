@@ -275,7 +275,7 @@ def push_issue(gh_username, gh_repository, issue, body, comments):
 
 if __name__ == "__main__":
     options = read_arguments()
-    bb_url = "https://api.bitbucket.org/1.0/repositories/{}/{}/issues".format(
+    bb_url = "https://bitbucket.org/api/1.0/repositories/{}/{}/issues".format(
         options.bitbucket_username,
         options.bitbucket_repo
     )
@@ -290,7 +290,7 @@ if __name__ == "__main__":
 
     # Sort issues, to sync issue numbers on freshly created GitHub projects.
     # Note: not memory efficient, could use too much memory on large projects.
-    for issue in sorted(issues, key=lambda issue: issue['local_id']):
+    for idx, issue in enumerate(sorted(issues, key=lambda issue: issue['local_id'])):
         comments = get_comments(bb_url, issue)
 
         if options.dry_run:
@@ -302,4 +302,4 @@ if __name__ == "__main__":
         else:
             body = format_body(options, issue).encode('utf-8')
             push_issue(gh_username, gh_repository, issue, body, comments)
-            print "Created {} issues".format(len(issues))
+            print "Created {} issues".format(idx + 1)
