@@ -76,10 +76,10 @@ def read_arguments():
 # Formatters
 def format_user(author_info):
     if not author_info:
-        return "Anonymous"
+        return u"Anonymous"
 
     if author_info['first_name'] and author_info['last_name']:
-        return " ".join([author_info['first_name'], author_info['last_name']])
+        return u" ".join([author_info['first_name'], author_info['last_name']])
 
     if 'username' in author_info:
         return '[{0}](http://bitbucket.org/{0})'.format(
@@ -112,6 +112,7 @@ def format_body(options, issue):
 
 
 def format_comment(comment):
+  try:
     return u"""{}
 
 {}
@@ -119,8 +120,11 @@ Original comment by: {}
 """.format(
         comment['body'],
         '-' * 40,
-        comment['user'].encode('utf-8')
+        comment['user']
     )
+  except Exception as inst:
+    print "Exception [", inst, "]. Body and user: [", comment['body']," - ", comment['user'],"] of types: [", type(comment['body']),", ", type(comment['user']), "]"
+    raise
 
 
 def clean_body(body):
@@ -200,7 +204,7 @@ def get_comments(bb_url, issue):
             comments.append({
                 'user': format_user(comment['author_info']),
                 'created_at': comment['utc_created_on'],
-                'body': body.encode('utf-8'),
+                'body': body,
                 'number': comment['comment_id']
             })
 
@@ -211,7 +215,7 @@ def get_comments(bb_url, issue):
 def push_issue(gh_username, gh_repository, issue, body, comments):
     # Create the issue
     issue_data = {
-        'title': issue.get('title').encode('utf-8'),
+        'title': issue.get('title'),
         'body': body
     }
     new_issue = github.issues.create(
@@ -288,6 +292,7 @@ if __name__ == "__main__":
     github = Github(login=options.github_username, password=github_password)
     gh_username, gh_repository = options.github_repo.split('/')
 
+    count = 0
     # Sort issues, to sync issue numbers on freshly created GitHub projects.
     # Note: not memory efficient, could use too much memory on large projects.
     for issue in sorted(issues, key=lambda issue: issue['local_id']):
@@ -300,6 +305,14 @@ if __name__ == "__main__":
             )
             print "Comments", [comment['body'] for comment in comments]
         else:
+         try:
             body = format_body(options, issue).encode('utf-8')
             push_issue(gh_username, gh_repository, issue, body, comments)
-            print "Created {} issues".format(len(issues))
+
+         except Exception as inst:
+            print "Failure: [", inst, "] type [", type(inst), "] "
+            if hasattr(inst, 'response'):
+               print "Response was [", inst.response.text, "]"
+            raise
+         count+=1
+         print "Created {} / {} issues".format(count, len(issues))
