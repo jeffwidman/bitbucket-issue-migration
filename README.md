@@ -15,24 +15,27 @@ You will need to install the requirements first
 ## Example
     
     python migrate.py -h
-    Usage: migrate.py [options]
-    
-    Options:
-      -h, --help            show this help message and exit
-      -t, --dry-run         Preform a dry run and print eveything.
-      -g GITHUB_USERNAME, --github-username=GITHUB_USERNAME
-                            GitHub username
-      -d GITHUB_REPO, --github_repo=GITHUB_REPO
-                            GitHub to add issues to. Format: <username>/<repo
-                            name>
-      -s BITBUCKET_REPO, --bitbucket_repo=BITBUCKET_REPO
-                            Bitbucket repo to pull data from.
-      -u BITBUCKET_USERNAME, --bitbucket_username=BITBUCKET_USERNAME
-                            Bitbucket username
-      -f START, --start=START
-                            Bitbucket id of the issue to start import (1 means you want all the issues)                       
+    usage: migrate.py [-h] [-n] [-f START]
+                      bitbucket_username bitbucket_repo github_username
+                      github_repo
 
-    python migrate.py -g <githbu_user> -d <github_repo> -s <bitbucket_repo> -u <bitbucket_usename> -f 1
+    A tool to migrate issues from Bitbucket to GitHub. note: the Bitbucket
+    repository and issue tracker have to bepublic
+
+    positional arguments:
+      bitbucket_username    Your Bitbucket username
+      bitbucket_repo        Bitbucket repository to pull data from.
+      github_username       Your GitHub username
+      github_repo           GitHub to add issues to. Format: <username>/<repo
+                            name>
+
+    optional arguments:
+      -h, --help            show this help message and exit
+      -n, --dry-run         Perform a dry run and print eveything.
+      -f START, --start_id START
+                            Bitbucket issue id from which to start import                  
+
+    python migrate.py -f 1 <bitbucket_usename> <bitbucket_repo> <githbu_user>
 
 Note: if you need to migrate to a GitHub organizational repository, use your personal username,
 but the appropriate API token for the repository.
