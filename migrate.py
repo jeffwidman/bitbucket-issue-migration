@@ -25,9 +25,7 @@ import operator
 import itertools
 import re
 import json
-import functools
 
-import github
 import requests
 
 try:
@@ -40,7 +38,6 @@ except ImportError:
 from six import text_type
 from six.moves import urllib
 from jaraco.itertools import Counter
-from jaraco.functools import Throttler
 
 
 def read_arguments():
@@ -234,7 +231,7 @@ class Handler(object):
     @classmethod
     def best(cls):
         options = read_arguments()
-        handler_cls = ImportHandler if not options.dry_run else DryRunHandler
+        handler_cls = SubmitHandler if not options.dry_run else DryRunHandler
         return handler_cls(options)
 
     def get_issues(self):
@@ -310,55 +307,12 @@ class SubmitHandler(Handler):
             keyring.get_password('Github', self.options.github_username) or
             getpass.getpass("Please enter your GitHub password\n")
         )
-        self.github = github.Github(
-            login_or_token=self.options.github_username,
-            password=self.github_password,
-        )
         return super(SubmitHandler, self).run()
 
     def handle(self, issue):
         comments = self.get_comments(issue)
         body = format_body(self.options, issue)
         self.push_issue(issue, body, comments)
-
-    # only allow one every 15 seconds to avoid hitting rate limits
-    @functools.partial(Throttler, max_rate=1/15)
-    def push_issue(self, issue, body, comments):
-        # Create the issue
-        repo_path = self.options.github_repo
-        issue_data = {
-            'title': issue['title'],
-            'body': body
-        }
-        repo = self.github.get_repo(repo_path)
-        new_issue = repo.create_issue(**issue_data)
-
-        # Set the status and labels
-        if issue['status'] == 'resolved':
-            new_issue.edit(state='closed')
-
-        # Everything else is done with labels in github
-        elif issue['status'] == 'wontfix':
-            new_issue.edit(state='closed')
-        elif issue['status'] == 'on hold':
-            pass
-        elif issue['status'] == 'invalid':
-            new_issue.edit(state='closed')
-        elif issue['status'] == 'duplicate':
-            new_issue.edit(state='closed')
-
-        # Milestones
-
-        # Add the comments
-        for comment in comments:
-            new_issue.create_comment(self.format_comment(comment))
-
-        print("Created: {} [{} comments]".format(
-            issue['title'], len(comments)
-        ))
-
-
-class ImportHandler(SubmitHandler):
 
     @property
     def auth(self):
