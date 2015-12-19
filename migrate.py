@@ -134,29 +134,6 @@ Originally created at: **{created}**
     )
 
 
-def format_comment(comment):
-    return """*Original comment by*: **{}**
-
-{}
-
-{}
-""".format(
-        comment['user'],
-        '-' * 40,
-        fix_links(options, clean_comment(comment['body'])),
-    )
-
-
-def fix_links(options, content):
-    """
-    Fix explicit links found in the body of a comment or issue to use
-    relative links ("#<id>").
-    """
-    pattern = r'https://bitbucket.org/{user}/{repo}/issue/(\d+)'.format(
-        user=options.bitbucket_username, repo=options.bitbucket_repo)
-    return re.sub(pattern, r'#\1', content)
-
-
 def format_date(bb_date):
     """
     Convert from one of the various date formats used by BitBucket to
@@ -301,6 +278,27 @@ class Handler(object):
         res = itertools.chain(result['issues'], self._iter_issues(next_start))
         for item in res:
             yield item
+
+    def format_comment(self, comment):
+        return """*Original comment by*: **{}**
+
+{}
+
+{}
+""".format(
+        comment['user'],
+        '-' * 40,
+        self.fix_links(clean_comment(comment['body'])),
+    )
+
+    def fix_links(self, content):
+        """
+        Fix explicit links found in the body of a comment or issue to use
+        relative links ("#<id>").
+        """
+        pattern = r'https://bitbucket.org/{user}/{repo}/issue/(\d+)'.format(
+            user=self.options.bitbucket_username, repo=self.options.bitbucket_repo)
+        return re.sub(pattern, r'#\1', content)
 
 
 class SubmitHandler(Handler):
