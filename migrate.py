@@ -347,8 +347,8 @@ class SubmitHandler(Handler):
         if labels:
             issue_data['issue']['labels'] = labels
 
-        url = 'https://api.github.com/repos/{user}/{repo}/import/issues'.format(
-            user=self.options.github_username, repo=self.options.github_repo)
+        url = 'https://api.github.com/repos/{repo}/import/issues'.format(
+            repo=self.options.github_repo)
         headers = {'Accept': 'application/vnd.github.golden-comet-preview+json'}
         respo = requests.post(url, json=issue_data, auth=self.auth, headers=headers)
         if respo.status_code in (200, 202):
