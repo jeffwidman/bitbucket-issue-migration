@@ -128,14 +128,15 @@ Originally created at: **{created}**
 
 
 def format_comment(comment):
-    return """{}
+    return """*Original comment by*: **{}**
 
 {}
-Original comment by: {}
+
+{}
 """.format(
-        clean_comment(comment['body']),
-        '-' * 40,
         comment['user'],
+        '-' * 40,
+        clean_comment(comment['body']),
     )
 
 
