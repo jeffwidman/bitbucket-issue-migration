@@ -55,7 +55,8 @@ def read_arguments():
         "github_repo",
         help=(
             "GitHub repository to add issues to.\n"
-            "Format: <username>/<repo name>"
+            "Format: <user or organization name>/<repo name>\n"
+            "Example: jeffwidman/bitbucket_issue_migration"
         )
     )
 
@@ -268,7 +269,7 @@ def get_comments(bb_url, issue):
 
 
 # GitHub push
-def push_issue(auth, gh_username, gh_repository, issue, body, comments, options):
+def push_issue(auth, github_repo, issue, body, comments, options):
     # Using the normal Issue API to import all issues will easily generate
     # an HTTP error, as explained by GitHub support:
     #   Creating issues and
@@ -303,8 +304,8 @@ def push_issue(auth, gh_username, gh_repository, issue, body, comments, options)
     if labels:
         issue_data['issue']['labels'] = labels
 
-    url = 'https://api.github.com/repos/{user}/{repo}/import/issues'.format(
-        user=gh_username, repo=gh_repository)
+    url = 'https://api.github.com/repos/{gh_repo}/import/issues'.format(
+        gh_repo=github_repo)
     headers = {'Accept': 'application/vnd.github.golden-comet-preview+json'}
     respo = requests.post(url, json=issue_data, auth=auth, headers=headers)
     if respo.status_code in (200, 202):
@@ -332,8 +333,7 @@ if __name__ == "__main__":
     issues = get_issues(bb_url, options.start)
 
     # push them in GitHub (issues comments are fetched here)
-    gh_username, gh_repository = options.github_repo.split('/')
-    auth = (gh_username, github_password)
+    auth = (options.github_username, github_password)
 
     # Sort issues, to sync issue numbers on freshly created GitHub projects.
     # Note: not memory efficient, could use too much memory on large projects.
@@ -349,6 +349,6 @@ if __name__ == "__main__":
             print u"Comments", [format_comment(options, comment['body'].encode('utf-8', errors='replace')) for comment in comments]
         else:
             body = format_body(options, issue)
-            push_issue(auth, gh_username, gh_repository, issue, body,
+            push_issue(auth, options.github_repo, issue, body,
                        comments, options)
             print "Created {} of {} issues".format(index + 1, len(issues))

@@ -26,20 +26,20 @@ You will need to install the requirements first
       bitbucket_repo        Bitbucket repository to pull data from.
       github_username       Your GitHub username
       github_repo           GitHub repository to add issues to.
-                            Format: <username>/<repo name>
+                            Format: <user or organization name>/<repo name>
+                            Example: jeffwidman/bitbucket_issue_migration
 
     optional arguments:
       -h, --help            show this help message and exit
-      -n, --dry-run         Perform a dry run and print eveything.
+      -n, --dry-run         Perform a dry run and print everything.
       -f START, --start_id START
                             Bitbucket issue ID from which to start the import
 
-    python migrate.py -f 1 <bitbucket_username> <bitbucket_repo> <github_username>
+    python migrate.py -f 1 <bitbucket_username> <bitbucket_repo> <github_username> <github_repo>
 
 ## Additional notes:
 
-1. If you need to migrate to a GitHub organizational repository, use your
-personal username, and the appropriate API token for the repository.
+* The Github repository can be owned by either an individual or an organization.
 
 2. The maximum allowable size per individual issue is 1MB. This limit is
 imposed by Github's
