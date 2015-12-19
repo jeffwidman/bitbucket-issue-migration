@@ -23,8 +23,10 @@ import argparse
 import getpass
 import operator
 import itertools
+import re
 
 import github
+import requests
 
 try:
     import keyring
@@ -136,6 +138,23 @@ Original comment by: {}
     )
 
 
+def format_date(bb_date):
+    """
+    Convert from one of the various date formats used by BitBucket to
+    the one supported by GitHub.
+    """
+    # u'2010-10-12T13:14:44.584'
+    m = re.search(r'(\d\d\d\d-\d\d-\d\d)T(\d\d:\d\d:\d\d)', bb_date)
+    if m:
+        return '{}T{}Z'.format(m.group(1), m.group(2))
+    # u'2012-11-26 09:59:39+00:00'
+    m = re.search(r'(\d\d\d\d-\d\d-\d\d) (\d\d:\d\d:\d\d)', bb_date)
+    if m:
+        return '{}T{}Z'.format(m.group(1), m.group(2))
+
+    raise RuntimeError('Could not parse date: {}'.format(bb_date))
+
+
 def clean_body(body):
     lines = []
     in_block = False
@@ -195,7 +214,7 @@ class Handler(object):
     @classmethod
     def best(cls):
         options = read_arguments()
-        handler_cls = SubmitHandler if not options.dry_run else DryRunHandler
+        handler_cls = ImportHandler if not options.dry_run else DryRunHandler
         return handler_cls(options)
 
     def get_issues(self):
@@ -246,13 +265,13 @@ class Handler(object):
 class SubmitHandler(Handler):
     def run(self):
         # push them in GitHub (issues comments are fetched here)
-        github_password = (
+        self.github_password = (
             keyring.get_password('Github', self.options.github_username) or
             getpass.getpass("Please enter your GitHub password\n")
         )
         self.github = github.Github(
             login_or_token=self.options.github_username,
-            password=github_password,
+            password=self.github_password,
         )
         return super(SubmitHandler, self).run()
 
@@ -294,6 +313,57 @@ class SubmitHandler(Handler):
         print("Created: {} [{} comments]".format(
             issue['title'], len(comments)
         ))
+
+
+class ImportHandler(SubmitHandler):
+
+    @property
+    def auth(self):
+        return self.options.github_username, self.github_password
+
+    def push_issue(self, issue, body, comments):
+        """
+        Use the Issue Import API to avoid HTTP errors due to GitHub throttling.
+
+        https://github.com/nicoddemus/bitbucket_issue_migration/issues/1
+        """
+
+        comments_data = [
+            {
+                'body': format_comment(self.options, x),
+                'created_at': format_date(x['created_at']),
+            } for x in comments]
+
+        issue_data = {
+            'issue': {
+                'title': issue.get('title'),
+                'body': body,
+                'closed': issue.get('status') not in ('open', 'new'),
+                'created_at': format_date(issue['created_on']),
+            },
+            'comments': comments_data,
+        }
+
+        labels = []
+        if issue['metadata']['kind']:
+            labels.append(issue['metadata']['kind'])
+        if issue['metadata']['component']:
+            labels.append(issue['metadata']['component'])
+        if labels:
+            issue_data['issue']['labels'] = labels
+
+        url = 'https://api.github.com/repos/{user}/{repo}/import/issues'.format(
+            user=self.options.github_username, repo=self.options.github_repo)
+        headers = {'Accept': 'application/vnd.github.golden-comet-preview+json'}
+        respo = requests.post(url, json=issue_data, auth=self.auth, headers=headers)
+        if respo.status_code in (200, 202):
+            print("Created bitbucket issue {}: {} [{} comments]".format(
+                issue['local_id'],
+                issue['title'].encode('ascii', errors='replace'),
+                len(comments),
+            ))
+        else:
+            raise RuntimeError("Failed to create issue: {}".format(issue['local_id']))
 
 
 class DryRunHandler(Handler):
