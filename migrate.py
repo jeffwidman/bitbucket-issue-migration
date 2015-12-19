@@ -351,7 +351,7 @@ class SubmitHandler(Handler):
 
         # Add the comments
         for comment in comments:
-            new_issue.create_comment(format_comment(comment))
+            new_issue.create_comment(self.format_comment(comment))
 
         print("Created: {} [{} comments]".format(
             issue['title'], len(comments)
@@ -373,7 +373,7 @@ class ImportHandler(SubmitHandler):
 
         comments_data = [
             {
-                'body': format_comment(self.options, x),
+                'body': self.format_comment(self.options, x),
                 'created_at': format_date(x['created_at']),
             } for x in comments]
 
@@ -415,7 +415,7 @@ class DryRunHandler(Handler):
         body = format_body(self.options, issue)
         print("Title: {}".format(issue['title']))
         print("Body: {}".format(body))
-        list(map(format_comment, comments))
+        list(map(self.format_comment, comments))
         print("Comments", [comment['body'] for comment in comments])
 
 
