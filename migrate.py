@@ -24,6 +24,7 @@ import getpass
 import operator
 import itertools
 import re
+import json
 
 import github
 import requests
@@ -34,11 +35,6 @@ except ImportError:
     # keyring isn't available, so mock the interface to simulate no pw
     class Keyring:
         get_password = staticmethod(lambda system, username: None)
-
-try:
-    import json
-except ImportError:
-    import simplejson as json
 
 from six import text_type
 from six.moves import urllib
