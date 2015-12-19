@@ -114,7 +114,6 @@ def format_name(issue):
 def format_body(options, issue):
     content = clean_body(issue.get('content'))
     return """Originally reported by: **{reporter}**
-Originally created at: **{created}**
 
 {sep}
 
@@ -129,7 +128,6 @@ Originally created at: **{created}**
         user=options.bitbucket_username,
         repo=options.bitbucket_repo,
         id=issue['local_id'],
-        created=issue['created_on'],
     )
 
 
