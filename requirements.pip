@@ -3,3 +3,4 @@ six
 jaraco.itertools>=1.1
 keyring
 requests
+jaraco.functools>=1.5
