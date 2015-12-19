@@ -233,13 +233,15 @@ class Handler(object):
         return handler_cls(options)
 
     def get_issues(self):
-        issues = self._iter_issues(self.options.start)
+        issues = Counter(self._iter_issues(self.options.start))
         # In order to sync issue numbers on a freshly-created Github project,
         # sort the issues by local_id
         # Note: not memory efficient and could use too much memory on large
         # projects.
         by_local_id = operator.itemgetter('local_id')
-        return sorted(issues, key=by_local_id)
+        sorted_issues = sorted(issues, key=by_local_id)
+        self.total_issues = issues.count
+        return sorted_issues
 
     def run(self):
         self.issues = Counter(self.get_issues())
@@ -352,9 +354,10 @@ class SubmitHandler(Handler):
         headers = {'Accept': 'application/vnd.github.golden-comet-preview+json'}
         respo = requests.post(url, json=issue_data, auth=self.auth, headers=headers)
         if respo.status_code in (200, 202):
-            tmpl = ("Created bitbucket issue {issue[local_id]}: "
+            tmpl = ("Created bitbucket issue {issue[local_id]} "
+                "({self.issues.count}/{self.total_issues}): "
                 "{issue[title]} [{n_comments} comments]")
-            print(tmpl.format(issue=issue, n_comments=len(comments)))
+            print(tmpl.format(issue=issue, n_comments=len(comments), self=self))
         else:
             raise RuntimeError("Failed to create issue: {}".format(issue['local_id']))
 
