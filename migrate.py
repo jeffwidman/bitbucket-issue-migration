@@ -314,6 +314,12 @@ def push_issue(auth, github_repo, issue, body, comments, options):
             issue['title'].encode('ascii', errors='replace'),
             len(comments),
         )
+    elif respo.status_code == 401:
+        raise RuntimeError(u"Failed to login to Github. If your account has "
+            "two-factor authentication enabled, you must use a personal access "
+            "token from https://github.com/settings/tokens in place of a "
+            "password for this script.\n"
+            )
     else:
         raise RuntimeError(u"Failed to create issue: {}".format(issue['local_id']))
 
@@ -327,7 +333,12 @@ if __name__ == "__main__":
 
     # ask for password so the user doesn't have to sit around waiting
     # to provide some initial input
-    github_password = getpass.getpass("Please enter your GitHub password\n")
+    github_password = getpass.getpass(
+        "Please enter your GitHub password.\n"
+        "Note: If your account has two-factor authentication enabled, you must "
+        "use a personal access token from https://github.com/settings/tokens "
+        "in place of a password for this script.\n"
+        )
 
     # fetch issues from Bitbucket
     issues = get_issues(bb_url, options.start)
