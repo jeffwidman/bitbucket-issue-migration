@@ -354,7 +354,7 @@ class SubmitHandler(Handler):
         if respo.status_code in (200, 202):
             print("Created bitbucket issue {}: {} [{} comments]".format(
                 issue['local_id'],
-                issue['title'].encode('ascii', errors='replace'),
+                issue['title'],
                 len(comments),
             ))
         else:
