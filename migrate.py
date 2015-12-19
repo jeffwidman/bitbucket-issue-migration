@@ -325,7 +325,7 @@ class SubmitHandler(Handler):
 
         comments_data = [
             {
-                'body': self.format_comment(self.options, x),
+                'body': self.format_comment(x),
                 'created_at': format_date(x['created_at']),
             } for x in comments]
 
