@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 #-*- coding: utf-8 -*-
 
-# This file is part of the bitbucket issue migration script.
+# This file is part of the Bitbucket issue migration script.
 #
 # The script is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -14,7 +14,7 @@
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with the bitbucket issue migration script.
+# along with the Bitbucket issue migration script.
 # If not, see <http://www.gnu.org/licenses/>.
 
 
@@ -31,7 +31,7 @@ def read_arguments():
     parser = argparse.ArgumentParser(
         description=(
             "A tool to migrate issues from Bitbucket to GitHub.\n"
-            "note: the Bitbucket repository and issue tracker have to be"
+            "Note: The Bitbucket repository and issue tracker have to be "
             "public"
         )
     )
@@ -53,7 +53,10 @@ def read_arguments():
 
     parser.add_argument(
         "github_repo",
-        help="GitHub to add issues to. Format: <username>/<repo name>"
+        help=(
+            "GitHub repository to add issues to.\n"
+            "Format: <username>/<repo name>"
+        )
     )
 
     parser.add_argument(
@@ -64,7 +67,7 @@ def read_arguments():
 
     parser.add_argument(
         "-f", "--start_id", type=int, dest="start", default=0,
-        help="Bitbucket issue id from which to start import"
+        help="Bitbucket issue ID from which to start the import"
     )
 
     return parser.parse_args()
@@ -79,7 +82,7 @@ def format_user(author_info):
     if author_info and 'username' in author_info:
         link1 = '[{0}](http://bitbucket.org/{0})'.format(author_info['username'])
         link2 = '[{0}](http://github.com/{0})'.format(author_info['username'])
-        links = 'BitBucket: {}, GitHub: {}'.format(link1, link2)
+        links = 'Bitbucket: {}, GitHub: {}'.format(link1, link2)
         if result:
             result += ' ({})'.format(links)
         else:
@@ -143,7 +146,7 @@ def fix_links(options, content):
 
 def format_date(bb_date):
     """
-    Convert from one of the various date formats used by BitBucket to
+    Convert from one of the various date formats used by Bitbucket to
     the one supported by GitHub.
     """
     # u'2010-10-12T13:14:44.584'

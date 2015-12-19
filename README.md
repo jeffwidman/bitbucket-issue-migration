@@ -1,41 +1,51 @@
-# bitbucket Issues Migration
+# Bitbucket Issues Migration
 
-This is a small script that will migrate bitbucket issues to a github project.
-It will use the bitbucket api to pull out the issues and comments.
+This is a small script that will migrate Bitbucket issues to a GitHub project.
 
-It will import issues (and close them as needed) and their comments. Labels and
-milestones are not supported at the moment.
+It will import issues (and close them as needed) and their comments. Labels are
+supported.
 
-## Before running
+## Before running:
 
 You will need to install the requirements first
 
     pip install -r requirements.pip
 
-## Example
-    
+## Example:
+
     python migrate.py -h
     usage: migrate.py [-h] [-n] [-f START]
                       bitbucket_username bitbucket_repo github_username
                       github_repo
 
-    A tool to migrate issues from Bitbucket to GitHub. note: the Bitbucket
-    repository and issue tracker have to bepublic
+    A tool to migrate issues from Bitbucket to GitHub.
+    Note: The Bitbucket repository and issue tracker have to be public
 
     positional arguments:
       bitbucket_username    Your Bitbucket username
       bitbucket_repo        Bitbucket repository to pull data from.
       github_username       Your GitHub username
-      github_repo           GitHub to add issues to. Format: <username>/<repo
-                            name>
+      github_repo           GitHub repository to add issues to.
+                            Format: <username>/<repo name>
 
     optional arguments:
       -h, --help            show this help message and exit
       -n, --dry-run         Perform a dry run and print eveything.
       -f START, --start_id START
-                            Bitbucket issue id from which to start import                  
+                            Bitbucket issue ID from which to start the import
 
-    python migrate.py -f 1 <bitbucket_usename> <bitbucket_repo> <githbu_user>
+    python migrate.py -f 1 <bitbucket_username> <bitbucket_repo> <github_username>
 
-Note: if you need to migrate to a GitHub organizational repository, use your personal username,
-but the appropriate API token for the repository.
+## Additional notes:
+
+1. If you need to migrate to a GitHub organizational repository, use your
+personal username, and the appropriate API token for the repository.
+
+2. The maximum allowable size per individual issue is 1MB. This limit is
+imposed by Github's
+[Import API](https://gist.github.com/jonmagic/5282384165e0f86ef105).
+
+
+
+Currently maintained by [Jeff Widman](http://www.jeffwidman.com/).
+Originally written and open-sourced by [Vitaly Babiy](http://www.howsthe.com/).
