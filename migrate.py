@@ -352,11 +352,9 @@ class SubmitHandler(Handler):
         headers = {'Accept': 'application/vnd.github.golden-comet-preview+json'}
         respo = requests.post(url, json=issue_data, auth=self.auth, headers=headers)
         if respo.status_code in (200, 202):
-            print("Created bitbucket issue {}: {} [{} comments]".format(
-                issue['local_id'],
-                issue['title'],
-                len(comments),
-            ))
+            tmpl = ("Created bitbucket issue {issue[local_id]}: "
+                "{issue[title]} [{n_comments} comments]")
+            print(tmpl.format(issue=issue, n_comments=len(comments)))
         else:
             raise RuntimeError("Failed to create issue: {}".format(issue['local_id']))
 
