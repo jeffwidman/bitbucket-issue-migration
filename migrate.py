@@ -357,7 +357,7 @@ if __name__ == "__main__":
             print u"Body: {}".format(
                 format_body(options, issue)
             )
-            print u"Comments", [format_comment(options, comment['body'].encode('utf-8', errors='replace')) for comment in comments]
+            print u"Comments", [format_comment(options, comment) for comment in comments]
         else:
             body = format_body(options, issue)
             push_issue(auth, options.github_repo, issue, body,
