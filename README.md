@@ -7,13 +7,16 @@ supported.
 
 ## Before running:
 
-You will need to install the requirements first:
+Requires Python 3 and a couple of libraries. It's probably a good idea to use Python 3's built-in `venv` tool:
 
-    pip install -r requirements.pip
+    $ pyvenv ./py3
+    $ source ./py3/bin/activate
+    $ pip3 install -r requirements.pip
 
 ## Example:
 
-    python migrate.py -h
+    $ python3 migrate.py -h
+    
     usage: migrate.py [-h] [-n] [-f START]
                       bitbucket_username bitbucket_repo github_username
                       github_repo
@@ -39,7 +42,7 @@ You will need to install the requirements first:
       -f START, --start_id START
                             Bitbucket issue ID from which to start the import
 
-    python migrate.py -f 1 <bitbucket_username> <bitbucket_repo> <github_username> <github_repo>
+    $ python3 migrate.py -f 1 <bitbucket_username> <bitbucket_repo> <github_username> <github_repo>
 
 ## Additional notes:
 

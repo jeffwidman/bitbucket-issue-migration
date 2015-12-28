@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-#-*- coding: utf-8 -*-
 
 # This file is part of the Bitbucket issue migration script.
 #
@@ -81,7 +80,7 @@ def read_arguments():
 def format_user(author_info):
     result = ''
     if author_info and author_info['first_name'] and author_info['last_name']:
-        result = u" ".join([author_info['first_name'], author_info['last_name']])
+        result = " ".join([author_info['first_name'], author_info['last_name']])
 
     if author_info and 'username' in author_info:
         # we assume they reused their Bitbucket username on Github
@@ -109,7 +108,7 @@ def format_name(issue):
 def format_body(options, issue):
     content = clean_body(issue['content'])
     content = fix_links(options, content)
-    return u"""Originally reported by: **{reporter}**
+    return """Originally reported by: **{reporter}**
 
 {sep}
 
@@ -127,7 +126,7 @@ def format_body(options, issue):
 
 
 def format_comment(options, comment):
-    return u"""*Original comment by* **{}**:
+    return """*Original comment by* **{}**:
 
 {}
 {}
@@ -153,11 +152,11 @@ def format_date(bb_date):
     Convert from one of the various date formats used by Bitbucket to
     the one supported by GitHub.
     """
-    # u'2010-10-12T13:14:44.584'
+    # '2010-10-12T13:14:44.584'
     m = re.search(r'(\d\d\d\d-\d\d-\d\d)T(\d\d:\d\d:\d\d)', bb_date)
     if m:
         return '{}T{}Z'.format(m.group(1), m.group(2))
-    # u'2012-11-26 09:59:39+00:00'
+    # '2012-11-26 09:59:39+00:00'
     m = re.search(r'(\d\d\d\d-\d\d-\d\d) (\d\d:\d\d:\d\d)', bb_date)
     if m:
         return '{}T{}Z'.format(m.group(1), m.group(2))
@@ -168,7 +167,7 @@ def format_date(bb_date):
 def clean_body(body):
     lines = []
     in_block = False
-    for line in unicode(body).splitlines():
+    for line in body.splitlines():
         if line.startswith("{{{") or line.startswith("}}}"):
             if "{{{" in line:
                 before, part, after = line.partition("{{{")
@@ -186,13 +185,13 @@ def clean_body(body):
                 lines.append(line.replace("{{{", "`").replace("}}}", "`"))
 
     clean_changesets(lines)
-    return u"\n".join(lines)
+    return "\n".join(lines)
 
 
 def clean_comment(body):
     lines = body.splitlines()
     clean_changesets(lines)
-    return u"\n".join(lines)
+    return "\n".join(lines)
 
 
 def clean_changesets(lines):
@@ -205,7 +204,7 @@ def clean_changesets(lines):
     to git hashes, better to remove them altogether.
     """
     for index, line in reversed(list(enumerate(lines))):
-        if line.startswith(u'→ <<cset'):
+        if line.startswith("→ <<cset"):
             lines.pop(index)
 
 def get_issues(bb_url, start_id):
@@ -229,14 +228,14 @@ def get_issues(bb_url, start_id):
 
         elif bb_issue_response.status_code == 404:
             raise RuntimeError(
-                u"Could not find the Bitbucket repository: {url}\n"
+                "Could not find the Bitbucket repository: {url}\n"
                 "Hint: the Bitbucket repository name is case-sensitive."
                 .format(url=url)
                 )
 
         else:
             raise RuntimeError(
-                u"Bitbucket returned an unexpected HTTP status code: {code}"
+                "Bitbucket returned an unexpected HTTP status code: {code}"
                 .format(bb_issue_response.status_code)
                 )
 
@@ -305,20 +304,18 @@ def push_issue(auth, github_repo, issue, body, comments, options):
     headers = {'Accept': 'application/vnd.github.golden-comet-preview+json'}
     respo = requests.post(url, json=issue_data, auth=auth, headers=headers)
     if respo.status_code in (200, 202):
-        print u"Created bitbucket issue {}: {} [{} comments]".format(
-            issue['local_id'],
-            issue['title'].encode('ascii', errors='replace'),
-            len(comments),
-        )
+        print("Created bitbucket issue {}: {} [{} comments]".format(
+                            issue['local_id'], issue['title'], len(comments))
+            )
     elif respo.status_code == 401:
         raise RuntimeError(
-            u"Failed to login to Github. If your account has two-factor "
+            "Failed to login to Github. If your account has two-factor "
             "authentication enabled, you must use a personal access token from "
             "https://github.com/settings/tokens in place of a password for "
             "this script.\n"
             )
     else:
-        raise RuntimeError(u"Failed to create issue: {}".format(issue['local_id']))
+        raise RuntimeError("Failed to create issue: {}".format(issue['local_id']))
 
 
 if __name__ == "__main__":
@@ -347,11 +344,12 @@ if __name__ == "__main__":
         comments = get_issue_comments(bb_url, issue)
 
         if options.dry_run:
-            print u"Title: {}".format(issue.get('title'))
-            print u"Body: {}".format(format_body(options, issue))
-            print u"Comments", [format_comment(options, comment) for comment in comments]
+            print("Title: {}".format(issue['title']))
+            print("Body: {}".format(format_body(options, issue)))
+            print("Comments", [format_comment(options, comment)
+                                                    for comment in comments])
         else:
             body = format_body(options, issue)
             push_issue(gh_auth, options.github_repo, issue, body,
                        comments, options)
-            print "Created {} of {} issues".format(index + 1, len(issues))
+            print("Created {} of {} issues".format(index + 1, len(issues)))
