@@ -84,6 +84,7 @@ def format_user(author_info):
         result = u" ".join([author_info['first_name'], author_info['last_name']])
 
     if author_info and 'username' in author_info:
+        # we assume they reused their Bitbucket username on Github
         link1 = '[{0}](http://bitbucket.org/{0})'.format(author_info['username'])
         link2 = '[{0}](http://github.com/{0})'.format(author_info['username'])
         links = 'Bitbucket: {}, GitHub: {}'.format(link1, link2)
@@ -207,12 +208,10 @@ def clean_changesets(lines):
         if line.startswith(u'→ <<cset'):
             lines.pop(index)
 
-
-# Bitbucket fetch
 def get_issues(bb_url, start_id):
-    '''
+    """
     Fetch the issues from Bitbucket
-    '''
+    """
     issues = []
 
     while True: # keep fetching additional pages of issues until all processed
@@ -222,7 +221,7 @@ def get_issues(bb_url, start_id):
         if bb_issue_response.status_code in (200, 202):
             result = bb_issue_response.json()
             if not result['issues']:
-                # Check to see if there is issues to process if not break out.
+                # Check to see if there are issues to process if not break out.
                 break
 
             issues += result['issues']
@@ -245,12 +244,12 @@ def get_issues(bb_url, start_id):
 
 
 def get_issue_comments(bb_url, issue):
-    '''
+    """
     Fetch the comments for a Bitbucket issue
-    '''
+    """
     url = "{bb_url}/{issue[local_id]}/comments/".format(**locals())
     result = requests.get(url).json()
-    ordered = sorted(result, key=lambda comment: comment["utc_created_on"])
+    ordered = sorted(result, key=lambda comment: comment['utc_created_on'])
 
     comments = []
     for comment in ordered:
@@ -268,18 +267,14 @@ def get_issue_comments(bb_url, issue):
 
     return comments
 
-
-# GitHub push
 def push_issue(auth, github_repo, issue, body, comments, options):
-    # Using the normal Issue API to import all issues will easily generate
-    # an HTTP error, as explained by GitHub support:
-    #   Creating issues and
-    #   comments via the API triggers email notifications just like they'd be
-    #   triggered when you create content via the Web UI. The abuse rate limit
-    #   was introduced in order to prevent spikes in notification emails which
-    #   cause problems for users and our infrastructure.
-    # This code uses the Issue Import API instead:
+    """
+    Push a single issue to Github
+    """
+    # Importing via Github's normal Issue API quickly triggers anti-abuse rate
+    # limits. So we use the Issue Import API instead:
     # https://github.com/nicoddemus/bitbucket_issue_migration/issues/1
+    # https://gist.github.com/jonmagic/5282384165e0f86ef105
 
     comments_data = [
         {
@@ -305,8 +300,8 @@ def push_issue(auth, github_repo, issue, body, comments, options):
     if labels:
         issue_data['issue']['labels'] = labels
 
-    url = 'https://api.github.com/repos/{gh_repo}/import/issues'.format(
-        gh_repo=github_repo)
+    url = 'https://api.github.com/repos/{repo}/import/issues'.format(
+        repo=github_repo)
     headers = {'Accept': 'application/vnd.github.golden-comet-preview+json'}
     respo = requests.post(url, json=issue_data, auth=auth, headers=headers)
     if respo.status_code in (200, 202):
@@ -316,10 +311,11 @@ def push_issue(auth, github_repo, issue, body, comments, options):
             len(comments),
         )
     elif respo.status_code == 401:
-        raise RuntimeError(u"Failed to login to Github. If your account has "
-            "two-factor authentication enabled, you must use a personal access "
-            "token from https://github.com/settings/tokens in place of a "
-            "password for this script.\n"
+        raise RuntimeError(
+            u"Failed to login to Github. If your account has two-factor "
+            "authentication enabled, you must use a personal access token from "
+            "https://github.com/settings/tokens in place of a password for "
+            "this script.\n"
             )
     else:
         raise RuntimeError(u"Failed to create issue: {}".format(issue['local_id']))
@@ -341,22 +337,18 @@ if __name__ == "__main__":
 
     gh_auth = (options.github_username, github_password)
 
-    # fetch issues from Bitbucket
     issues = get_issues(bb_url, options.start)
 
-    # Sort issues, to sync issue numbers on freshly created GitHub projects.
+    # sort issues, to sync issue numbers on freshly created GitHub projects.
     # Note: not memory efficient, could use too much memory on large projects.
     issues = sorted(issues, key=lambda issue: issue['local_id'])
 
-    # push issues to Github, along the way fetch issue comments from Bitbucket
     for index, issue in enumerate(issues):
         comments = get_issue_comments(bb_url, issue)
 
         if options.dry_run:
             print u"Title: {}".format(issue.get('title'))
-            print u"Body: {}".format(
-                format_body(options, issue)
-            )
+            print u"Body: {}".format(format_body(options, issue))
             print u"Comments", [format_comment(options, comment) for comment in comments]
         else:
             body = format_body(options, issue)

@@ -7,7 +7,7 @@ supported.
 
 ## Before running:
 
-You will need to install the requirements first
+You will need to install the requirements first:
 
     pip install -r requirements.pip
 
@@ -45,7 +45,11 @@ You will need to install the requirements first
 
 * The Github repository can be owned by either an individual or an organization.
 
-2. The maximum allowable size per individual issue is 1MB. This limit is
+* In addition to normal label migration, this script also creates Github labels
+that map to the Bitbucket issue type (bug, task, etc). If you don't want these,
+just delete the new Github labels post-migration.
+
+* The maximum allowable size per individual issue is 1MB. This limit is
 imposed by Github's
 [Import API](https://gist.github.com/jonmagic/5282384165e0f86ef105).
 
