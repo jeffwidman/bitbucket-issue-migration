@@ -23,11 +23,15 @@ You will need to install the requirements first
 
     positional arguments:
       bitbucket_username    Your Bitbucket username
-      bitbucket_repo        Bitbucket repository to pull data from.
+      bitbucket_repo        Bitbucket repository to pull issues from.
+                            Format:
+                            <user or organization name>/<repo name> Example:
+                            jeffwidman/bitbucket-issue-migration
       github_username       Your GitHub username
       github_repo           GitHub repository to add issues to.
-                            Format: <user or organization name>/<repo name>
-                            Example: jeffwidman/bitbucket_issue_migration
+                            Format:
+                            <user or organization name>/<repo name> Example:
+                            jeffwidman/bitbucket-issue-migration
 
     optional arguments:
       -h, --help            show this help message and exit
