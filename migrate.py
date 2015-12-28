@@ -233,6 +233,14 @@ def get_issues(bb_url, start_id):
                 .format(url=url)
                 )
 
+        elif bb_issue_response.status_code == 401:
+            raise RuntimeError(
+                "Failed to login to Bitbucket."
+                "Hint: You must disable two-factor authentication on your "
+                "Bitbucket account until "
+                "https://bitbucket.org/site/master/issues/11774/ is resolved"
+                )
+
         else:
             raise RuntimeError(
                 "Bitbucket returned an unexpected HTTP status code: {code}"
