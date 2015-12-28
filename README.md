@@ -7,7 +7,8 @@ supported.
 
 ## Before running:
 
-Requires Python 3 and a couple of libraries. It's probably a good idea to use Python 3's built-in `venv` tool:
+Requires Python 3 and a couple of libraries. It's probably a good idea to use
+Python 3's built-in `venv` tool:
 
     $ pyvenv ./py3
     $ source ./py3/bin/activate
@@ -16,7 +17,7 @@ Requires Python 3 and a couple of libraries. It's probably a good idea to use Py
 ## Example:
 
     $ python3 migrate.py -h
-    
+
     usage: migrate.py [-h] [-n] [-f START]
                       bitbucket_username bitbucket_repo github_username
                       github_repo
@@ -46,14 +47,34 @@ Requires Python 3 and a couple of libraries. It's probably a good idea to use Py
 
 ## Additional notes:
 
-* The Github repository can be owned by either an individual or an organization.
+* The GitHub repository can be owned by either an individual or an organization.
 
-* In addition to normal label migration, this script also creates Github labels
+* In addition to normal label migration, this script also creates GitHub labels
 that map to the Bitbucket issue type (bug, task, etc). If you don't want these,
-just delete the new Github labels post-migration.
+just delete the new GitHub labels post-migration.
+
+* The migrated issues and issue comments are annotated with both Bitbucket and
+GitHub links to user who authored the comment/issue. This assumes the user
+reused their Bitbucket username on GitHub.
+
+* Within the body of issues and issue comments, hyperlinks to other issues
+in this Bitbucket repo will be rewritten as `#<ID>`, which GitHub will
+automatically hyperlink to the GitHub issue with that particular ID. This
+assumes that you are migrating to a GitHub repository that has no existing
+issues, otherwise the imported issues will have a different ID on GitHub than
+on Bitbucket and the links will be incorrect. If you are migrating to a GitHub
+repo with existing issues, just edit the code to offset the imported issue IDs
+by the correct amount.
+
+* This script is not idempotent--re-running it will leave the first set of
+imported issues intact, and then create a duplicate set of imported issues after
+the first set. If you want to re-run the import, it's best to delete your GitHub
+repo and start over so that the GitHub issue IDs start from 1. Alternatively, if
+an import breaks midway, you can restart from the breakage point using the
+`--start_id` option.
 
 * The maximum allowable size per individual issue is 1MB. This limit is
-imposed by Github's
+imposed by GitHub's
 [Import API](https://gist.github.com/jonmagic/5282384165e0f86ef105).
 
 

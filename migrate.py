@@ -20,7 +20,6 @@
 import argparse
 import getpass
 import json
-
 import re
 import requests
 
