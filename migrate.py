@@ -215,7 +215,7 @@ def get_issues(bb_url, start_id):
     issues = []
 
     while True: # keep fetching additional pages of issues until all processed
-        url = "{}/?start={}".format(bb_url, start_id)
+        url = "{bb_url}/?start={start_id}".format(**locals())
         bb_issue_response = requests.get(url)
 
         if bb_issue_response.status_code in (200, 202):
