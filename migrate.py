@@ -107,7 +107,7 @@ def format_name(issue):
 
 
 def format_body(options, issue):
-    content = clean_body(issue.get('content'))
+    content = clean_body(issue['content'])
     content = fix_links(options, content)
     return u"""Originally reported by: **{reporter}**
 
@@ -284,9 +284,9 @@ def push_issue(auth, github_repo, issue, body, comments, options):
 
     issue_data = {
         'issue': {
-            'title': issue.get('title'),
+            'title': issue['title'],
             'body': body,
-            'closed': issue.get('status') not in ('open', 'new'),
+            'closed': issue['status'] not in ('open', 'new'),
             'created_at': format_date(issue['created_on']),
         },
         'comments': comments_data,
