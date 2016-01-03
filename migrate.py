@@ -104,9 +104,9 @@ def format_name(issue):
         return "Anonymous"
 
 
-def format_body(options, issue):
+def format_body(issue, options):
     content = clean_body(issue['content'])
-    content = fix_links(options, content)
+    content = format_links(content, options)
     return """Originally reported by: **{reporter}**
 
 {sep}
@@ -124,7 +124,7 @@ def format_body(options, issue):
     )
 
 
-def format_comment(options, comment):
+def format_comment(comment, options):
     return """*Original comment by* **{}**:
 
 {}
@@ -132,13 +132,13 @@ def format_comment(options, comment):
 """.format(
         comment['user'],
         '-' * 40,
-        fix_links(options, clean_comment(comment['body'])),
+        format_links(clean_comment(comment['body']), options),
     )
 
 
-def fix_links(options, content):
+def format_links(content, options):
     """
-    Fix explicit links found in the body of a comment or issue to use
+    Convert explicit links found in the body of a comment or issue to use
     relative links ("#<id>").
     """
     pattern = r'https://bitbucket.org/{repo}/issue/(\d+)'.format(
@@ -249,7 +249,7 @@ def get_issues(bb_url, start_id):
     return issues
 
 
-def get_issue_comments(bb_url, issue):
+def get_issue_comments(issue, bb_url):
     """
     Fetch the comments for a Bitbucket issue
     """
@@ -278,8 +278,8 @@ def print_issue(issue, comments, options):
     Print the output of processing a single issue and associated comments
     """
     print("Title: {}".format(issue['title']))
-    print("Body: {}".format(format_body(options, issue)))
-    print("Comments", [format_comment(options, comment)
+    print("Body: {}".format(format_body(issue, options)))
+    print("Comments", [format_comment(comment, options)
                                             for comment in comments])
 
 def push_issue(auth, github_repo, issue, body, comments, options):
@@ -293,9 +293,9 @@ def push_issue(auth, github_repo, issue, body, comments, options):
 
     comments_data = [
         {
-            'body': format_comment(options, x),
-            'created_at': format_date(x['created_at']),
-        } for x in comments]
+            'body': format_comment(comment, options),
+            'created_at': format_date(comment['created_at']),
+        } for comment in comments]
 
     issue_data = {
         'issue': {
@@ -357,13 +357,13 @@ if __name__ == "__main__":
     issues = sorted(issues, key=lambda issue: issue['local_id'])
 
     for index, issue in enumerate(issues):
-        comments = get_issue_comments(bb_url, issue)
+        comments = get_issue_comments(issue, bb_url)
 
         if options.dry_run:
             print_issue(issue, comments, options)
             print("Dryrun: {} of {} issues".format(index + 1, len(issues)))
         else:
-            body = format_body(options, issue)
+            body = format_body(issue, options)
             push_issue(gh_auth, options.github_repo, issue, body,
                        comments, options)
             print("Created {} of {} issues".format(index + 1, len(issues)))
