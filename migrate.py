@@ -22,6 +22,7 @@ import getpass
 import json
 import re
 import requests
+import sys
 
 
 def read_arguments():
@@ -74,6 +75,40 @@ def read_arguments():
 
     return parser.parse_args()
 
+def main(options):
+    """
+    Main entry point for the script.
+    """
+    bb_url = "https://api.bitbucket.org/1.0/repositories/{repo}/issues".format(
+        repo=options.bitbucket_repo)
+
+    # ask for password so the user doesn't have to sit around waiting
+    # to provide some initial input
+    github_password = getpass.getpass(
+        "Please enter your GitHub password.\n"
+        "Note: If your account has two-factor authentication enabled, you must "
+        "use a personal access token from https://github.com/settings/tokens "
+        "in place of a password for this script.\n"
+        )
+
+    gh_auth = (options.github_username, github_password)
+
+    issues = get_issues(bb_url, options.start)
+
+    # sort issues, to sync issue numbers on freshly created GitHub projects.
+    # Note: not memory efficient, could use too much memory on large projects.
+    issues = sorted(issues, key=lambda issue: issue['local_id'])
+
+    for index, issue in enumerate(issues):
+        comments = get_issue_comments(issue, bb_url)
+
+        if options.dry_run:
+            print_issue(issue, comments, options)
+        else:
+            body = format_body(issue, options)
+            push_issue(gh_auth, options.github_repo, issue, body,
+                       comments, options)
+        print("Completed {} of {} issues".format(index + 1, len(issues)))
 
 # Formatters
 def format_user(author_info):
@@ -336,34 +371,4 @@ def push_issue(auth, github_repo, issue, body, comments, options):
 
 if __name__ == "__main__":
     options = read_arguments()
-    bb_url = "https://api.bitbucket.org/1.0/repositories/{repo}/issues".format(
-        repo=options.bitbucket_repo)
-
-    # ask for password so the user doesn't have to sit around waiting
-    # to provide some initial input
-    github_password = getpass.getpass(
-        "Please enter your GitHub password.\n"
-        "Note: If your account has two-factor authentication enabled, you must "
-        "use a personal access token from https://github.com/settings/tokens "
-        "in place of a password for this script.\n"
-        )
-
-    gh_auth = (options.github_username, github_password)
-
-    issues = get_issues(bb_url, options.start)
-
-    # sort issues, to sync issue numbers on freshly created GitHub projects.
-    # Note: not memory efficient, could use too much memory on large projects.
-    issues = sorted(issues, key=lambda issue: issue['local_id'])
-
-    for index, issue in enumerate(issues):
-        comments = get_issue_comments(issue, bb_url)
-
-        if options.dry_run:
-            print_issue(issue, comments, options)
-            print("Dryrun: {} of {} issues".format(index + 1, len(issues)))
-        else:
-            body = format_body(issue, options)
-            push_issue(gh_auth, options.github_repo, issue, body,
-                       comments, options)
-            print("Created {} of {} issues".format(index + 1, len(issues)))
+    sys.exit(main(options))
