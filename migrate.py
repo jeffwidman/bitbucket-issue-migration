@@ -273,6 +273,15 @@ def get_issue_comments(bb_url, issue):
 
     return comments
 
+def print_issue(issue, comments, options):
+    """
+    Print the output of processing a single issue and associated comments
+    """
+    print("Title: {}".format(issue['title']))
+    print("Body: {}".format(format_body(options, issue)))
+    print("Comments", [format_comment(options, comment)
+                                            for comment in comments])
+
 def push_issue(auth, github_repo, issue, body, comments, options):
     """
     Push a single issue to Github
@@ -351,10 +360,8 @@ if __name__ == "__main__":
         comments = get_issue_comments(bb_url, issue)
 
         if options.dry_run:
-            print("Title: {}".format(issue['title']))
-            print("Body: {}".format(format_body(options, issue)))
-            print("Comments", [format_comment(options, comment)
-                                                    for comment in comments])
+            print_issue(issue, comments, options)
+            print("Dryrun: {} of {} issues".format(index + 1, len(issues)))
         else:
             body = format_body(options, issue)
             push_issue(gh_auth, options.github_repo, issue, body,
