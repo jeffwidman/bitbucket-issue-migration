@@ -107,32 +107,20 @@ def main(options):
         print("Completed {} of {} issues".format(index + 1, len(issues)))
 
 # Formatters
-def format_user(author_info):
-    result = ''
-    if author_info and author_info['first_name'] and author_info['last_name']:
-        result = " ".join([author_info['first_name'], author_info['last_name']])
-
-    if author_info and 'username' in author_info:
-        # we assume they reused their Bitbucket username on Github
-        link1 = '[{0}](http://bitbucket.org/{0})'.format(author_info['username'])
-        link2 = '[{0}](http://github.com/{0})'.format(author_info['username'])
-        links = 'Bitbucket: {}, GitHub: {}'.format(link1, link2)
-        if result:
-            result += ' ({})'.format(links)
-        else:
-            result = links
-
-    if not result:
-        result = "Anonymous"
-
-    return result
-
-
-def format_name(issue):
-    if 'reported_by' in issue:
-        return format_user(issue['reported_by'])
-    else:
+def format_user(user):
+    """
+    Format a Bitbucket user's info into a string containing either 'Anonymous'
+    or their name and links to their Bitbucket and GitHub profiles.
+    The GitHub profile link may be incorrect because it assumes they reused
+    their Bitbucket username on GitHub.
+    """
+    # anonymous comments have null 'author_info', anonymous issues don't have
+    # 'reported_by' key, so just be sure to pass in None
+    if user is None:
         return "Anonymous"
+    return (user['display_name'] + " (Bitbucket: [{0}]"
+            "(http://bitbucket.org/{0}), Github: [{0}](http://github.com/{0}))"
+            .format(user['username']))
 
 
 def format_body(issue, options):
@@ -147,7 +135,8 @@ def format_body(issue, options):
 {sep}
 - Bitbucket: https://bitbucket.org/{repo}/issue/{id}
 """.format(
-        reporter=format_name(issue),
+        # anonymous issues are missing 'reported_by' key
+        reporter=format_user(issue.get('reported_by', None)),
         sep='-' * 40,
         content=content,
         repo=options.bitbucket_repo,
