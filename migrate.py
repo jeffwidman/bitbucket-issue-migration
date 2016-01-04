@@ -69,7 +69,7 @@ def read_arguments():
     )
 
     parser.add_argument(
-        "-f", "--start_id", type=int, dest="start", default=0,
+        "-f", "--start_id", type=int, dest="start_id", default=1,
         help="Bitbucket issue ID from which to start the import"
     )
 
@@ -93,11 +93,7 @@ def main(options):
 
     gh_auth = (options.github_username, github_password)
 
-    issues = get_issues(bb_url, options.start)
-
-    # sort issues, to sync issue numbers on freshly created GitHub projects.
-    # Note: not memory efficient, could use too much memory on large projects.
-    issues = sorted(issues, key=lambda issue: issue['local_id'])
+    issues = get_issues(bb_url, options.start_id)
 
     for index, issue in enumerate(issues):
         comments = get_issue_comments(issue, bb_url)
@@ -245,11 +241,12 @@ def get_issues(bb_url, start_id):
     """
     Fetch the issues from Bitbucket
     """
+    start_id -= 1 # BB API sorting uses 0-based indexing
     issues = []
 
     while True: # keep fetching additional pages of issues until all processed
-        url = "{bb_url}/?start={start_id}".format(**locals())
-        bb_issue_response = requests.get(url)
+        bb_issue_response = requests.get(bb_url,
+                                params={'sort': 'local_id', 'start': start_id})
 
         if bb_issue_response.status_code in (200, 202):
             result = bb_issue_response.json()
@@ -289,11 +286,13 @@ def get_issue_comments(issue, bb_url):
     Fetch the comments for a Bitbucket issue
     """
     url = "{bb_url}/{issue[local_id]}/comments/".format(**locals())
-    result = requests.get(url).json()
-    ordered = sorted(result, key=lambda comment: comment['utc_created_on'])
+    # BB API always returns newest comments first, regardless of 'sort' param;
+    # however, comment order doesn't matter because we don't care about
+    # comment IDs and GitHub orders by creation date when displaying.
+    bb_comments = requests.get(url).json()
 
     comments = []
-    for comment in ordered:
+    for comment in bb_comments:
         body = comment['content'] or ''
 
         # Status comments (assigned, version, etc. changes) have in bitbucket
