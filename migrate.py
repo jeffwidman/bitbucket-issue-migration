@@ -125,7 +125,7 @@ def format_user(user):
             .format(user['username']))
 
 
-def format_body(issue, options):
+def format_issue_body(issue, options):
     content = clean_body(issue['content'])
     content = format_links(content, options)
     return """Originally reported by: **{reporter}**
@@ -146,7 +146,7 @@ def format_body(issue, options):
     )
 
 
-def format_comment(comment, options):
+def format_comment_body(comment, options):
     return """*Original comment by* **{author}**:
 
 {sep}
@@ -291,7 +291,7 @@ def convert_issue(issue, options):
 
     return {
         'title': issue['title'],
-        'body': format_body(issue, options),
+        'body': format_issue_body(issue, options),
         'closed': issue['status'] not in ('open', 'new'),
         'created_at': format_date(issue['utc_created_on']),
         'labels': labels
@@ -310,7 +310,7 @@ def convert_comment(comment, options):
     if comment['content']: # BB status comments have no content
         return {
             'created_at': format_date(comment['utc_created_on']),
-            'body': format_comment(comment, options),
+            'body': format_comment_body(comment, options),
             }
 
 
