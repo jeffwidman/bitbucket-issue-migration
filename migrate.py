@@ -97,6 +97,8 @@ def main(options):
 
     for index, issue in enumerate(issues):
         comments = get_issue_comments(issue, bb_url)
+        comments = [convert_comment(c, options) for c in comments
+                                if convert_comment(c, options) is not None]
 
         if options.dry_run:
             print_issue(issue, comments, options)
@@ -145,14 +147,15 @@ def format_body(issue, options):
 
 
 def format_comment(comment, options):
-    return """*Original comment by* **{}**:
+    return """*Original comment by* **{author}**:
 
-{}
-{}
+{sep}
+
+{content}
 """.format(
-        comment['user'],
-        '-' * 40,
-        format_links(clean_comment(comment['body']), options),
+        author=format_user(comment['author_info']),
+        sep='-' * 40,
+        content=format_links(clean_comment(comment['content']), options),
     )
 
 
@@ -278,23 +281,20 @@ def get_issue_comments(issue, bb_url):
     # BB API always returns newest comments first, regardless of 'sort' param;
     # however, comment order doesn't matter because we don't care about
     # comment IDs and GitHub orders by creation date when displaying.
-    bb_comments = requests.get(url).json()
+    return requests.get(url).json()
 
-    comments = []
-    for comment in bb_comments:
-        body = comment['content'] or ''
 
-        # Status comments (assigned, version, etc. changes) have in bitbucket
-        # no body
-        if body:
-            comments.append({
-                'user': format_user(comment['author_info']),
-                'created_at': comment['utc_created_on'],
-                'body': body,
-                'number': comment['comment_id']
-            })
-
-    return comments
+def convert_comment(comment, options):
+    """
+    Convert an issue comment from Bitbucket format to GitHub format
+    """
+    # Bitbucket status comments (assigned, version, etc. changes) are not
+    # imported to minimize noise. Easily filtered because they have no content.
+    if comment['content']:
+        return {
+            'created_at': format_date(comment['utc_created_on']),
+            'body': format_comment(comment, options),
+            }
 
 def print_issue(issue, comments, options):
     """
@@ -302,8 +302,8 @@ def print_issue(issue, comments, options):
     """
     print("Title: {}".format(issue['title']))
     print("Body: {}".format(format_body(issue, options)))
-    print("Comments", [format_comment(comment, options)
-                                            for comment in comments])
+    print("Comments: ", comments)
+
 
 def push_issue(auth, github_repo, issue, body, comments, options):
     """
@@ -314,12 +314,6 @@ def push_issue(auth, github_repo, issue, body, comments, options):
     # https://github.com/nicoddemus/bitbucket_issue_migration/issues/1
     # https://gist.github.com/jonmagic/5282384165e0f86ef105
 
-    comments_data = [
-        {
-            'body': format_comment(comment, options),
-            'created_at': format_date(comment['created_at']),
-        } for comment in comments]
-
     issue_data = {
         'issue': {
             'title': issue['title'],
@@ -327,7 +321,7 @@ def push_issue(auth, github_repo, issue, body, comments, options):
             'closed': issue['status'] not in ('open', 'new'),
             'created_at': format_date(issue['created_on']),
         },
-        'comments': comments_data,
+        'comments': comments,
     }
 
     labels = []
