@@ -90,22 +90,22 @@ def main(options):
         "use a personal access token from https://github.com/settings/tokens "
         "in place of a password for this script.\n"
         )
-
     gh_auth = (options.github_username, github_password)
 
     issues = get_issues(bb_url, options.start_id)
-
     for index, issue in enumerate(issues):
         comments = get_issue_comments(issue, bb_url)
+        # issue can't be converted until comments are retrieved because need
+        # access to issue['local_id'] for retrieving comments
+        issue = convert_issue(issue, options)
         comments = [convert_comment(c, options) for c in comments
                                 if convert_comment(c, options) is not None]
 
         if options.dry_run:
-            print_issue(issue, comments, options)
+            print("\nIssue:", issue)
+            print("\nComments: ", comments)
         else:
-            body = format_body(issue, options)
-            push_issue(gh_auth, options.github_repo, issue, body,
-                       comments, options)
+            push_issue(issue, comments, options.github_repo, gh_auth)
         print("Completed {} of {} issues".format(index + 1, len(issues)))
 
 # Formatters
@@ -284,6 +284,31 @@ def get_issue_comments(issue, bb_url):
     return requests.get(url).json()
 
 
+def convert_issue(issue, options):
+    """
+    Convert an issue from Bitbucket format to GitHub format
+    """
+    # Bitbucket issues have an 'is_spam' field that Akismet sets true/false.
+    # they still need to be imported so that issue IDs stay sync'd
+
+    labels = []
+    if issue['metadata']['kind']:
+        labels.append(issue['metadata']['kind'])
+    if issue['metadata']['component']:
+        labels.append(issue['metadata']['component'])
+
+    return {
+        'title': issue['title'],
+        'body': format_body(issue, options),
+        'closed': issue['status'] not in ('open', 'new'),
+        'created_at': format_date(issue['created_on']),
+        'labels': labels
+        # GitHub Import API supports assignee, but we can't use it because
+        # our mapping of BB users to GH users isn't 100% accurate
+        # 'assignee': "jonmagic",
+        }
+
+
 def convert_comment(comment, options):
     """
     Convert an issue comment from Bitbucket format to GitHub format
@@ -296,59 +321,33 @@ def convert_comment(comment, options):
             'body': format_comment(comment, options),
             }
 
-def print_issue(issue, comments, options):
-    """
-    Print the output of processing a single issue and associated comments
-    """
-    print("Title: {}".format(issue['title']))
-    print("Body: {}".format(format_body(issue, options)))
-    print("Comments: ", comments)
 
-
-def push_issue(auth, github_repo, issue, body, comments, options):
+def push_issue(issue, comments, github_repo, auth):
     """
-    Push a single issue to Github
+    Push a single issue to GitHub
     """
-    # Importing via Github's normal Issue API quickly triggers anti-abuse rate
-    # limits. So we use the Issue Import API instead:
+    # Importing via GitHub's normal Issue API quickly triggers anti-abuse rate
+    # limits. So we use their dedicated Issue Import API instead:
     # https://github.com/nicoddemus/bitbucket_issue_migration/issues/1
     # https://gist.github.com/jonmagic/5282384165e0f86ef105
-
-    issue_data = {
-        'issue': {
-            'title': issue['title'],
-            'body': body,
-            'closed': issue['status'] not in ('open', 'new'),
-            'created_at': format_date(issue['created_on']),
-        },
-        'comments': comments,
-    }
-
-    labels = []
-    if issue['metadata']['kind']:
-        labels.append(issue['metadata']['kind'])
-    if issue['metadata']['component']:
-        labels.append(issue['metadata']['component'])
-    if labels:
-        issue_data['issue']['labels'] = labels
-
+    issue_data = {'issue': issue, 'comments': comments}
     url = 'https://api.github.com/repos/{repo}/import/issues'.format(
         repo=github_repo)
     headers = {'Accept': 'application/vnd.github.golden-comet-preview+json'}
     respo = requests.post(url, json=issue_data, auth=auth, headers=headers)
     if respo.status_code in (200, 202):
-        print("Created bitbucket issue {}: {} [{} comments]".format(
-                            issue['local_id'], issue['title'], len(comments))
+        print("Created Bitbucket issue: {} [{} comments]".format(
+                                        issue['title'], len(comments))
             )
     elif respo.status_code == 401:
         raise RuntimeError(
-            "Failed to login to Github. If your account has two-factor "
+            "Failed to login to GitHub. If your account has two-factor "
             "authentication enabled, you must use a personal access token from "
             "https://github.com/settings/tokens in place of a password for "
             "this script.\n"
             )
     else:
-        raise RuntimeError("Failed to create issue: {}".format(issue['local_id']))
+        raise RuntimeError("Failed to create issue: {}".format(issue['title']))
 
 
 if __name__ == "__main__":
