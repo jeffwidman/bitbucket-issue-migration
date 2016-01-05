@@ -285,7 +285,7 @@ def convert_issue(issue, options):
 
     labels = [issue['priority']]
     for k, v in issue['metadata'].items():
-        if k in ['component', 'kind', 'version'] and v is not None:
+        if k in ['component', 'kind', 'milestone', 'version'] and v is not None:
             labels.append(v)
 
     return {
@@ -294,6 +294,12 @@ def convert_issue(issue, options):
         'closed': issue['status'] not in ('open', 'new'),
         'created_at': format_date(issue['utc_created_on']),
         'labels': labels,
+        # milestones are supported by both BB and GH APIs. Need to provide a
+        # mapping from milestone titles in BB to milestone IDs in GH. The
+        # milestone ID must already exist in GH or the import will be rejected.
+        # GitHub schema: 'milestone': <integer ID>
+        # Bitbucket schema: issue['metadata']['milestone']: <string Title>
+        ####
         # GitHub Import API supports assignee, but we can't use it because
         # our mapping of BB users to GH users isn't 100% accurate
         # 'assignee': "jonmagic",
