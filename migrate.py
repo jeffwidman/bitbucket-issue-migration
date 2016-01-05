@@ -171,13 +171,8 @@ def format_links(content, options):
 
 def format_date(bb_date):
     """
-    Convert from one of the various date formats used by Bitbucket to
-    the one supported by GitHub.
+    Convert the date from Bitbucket format to GitHub format
     """
-    # '2010-10-12T13:14:44.584'
-    m = re.search(r'(\d\d\d\d-\d\d-\d\d)T(\d\d:\d\d:\d\d)', bb_date)
-    if m:
-        return '{}T{}Z'.format(m.group(1), m.group(2))
     # '2012-11-26 09:59:39+00:00'
     m = re.search(r'(\d\d\d\d-\d\d-\d\d) (\d\d:\d\d:\d\d)', bb_date)
     if m:
@@ -298,7 +293,7 @@ def convert_issue(issue, options):
         'title': issue['title'],
         'body': format_body(issue, options),
         'closed': issue['status'] not in ('open', 'new'),
-        'created_at': format_date(issue['created_on']),
+        'created_at': format_date(issue['utc_created_on']),
         'labels': labels
         # GitHub Import API supports assignee, but we can't use it because
         # our mapping of BB users to GH users isn't 100% accurate
