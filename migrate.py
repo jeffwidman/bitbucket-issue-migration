@@ -82,8 +82,7 @@ def main(options):
     bb_url = "https://api.bitbucket.org/1.0/repositories/{repo}/issues".format(
         repo=options.bitbucket_repo)
 
-    # ask for password so the user doesn't have to sit around waiting
-    # to provide some initial input
+    # ask for password upfront so the user doesn't have to sit around waiting
     github_password = getpass.getpass(
         "Please enter your GitHub password.\n"
         "Note: If your account has two-factor authentication enabled, you must "
@@ -108,6 +107,7 @@ def main(options):
             push_issue(issue, comments, options.github_repo, gh_auth)
         print("Completed {} of {} issues".format(index + 1, len(issues)))
 
+
 # Formatters
 def format_user(user):
     """
@@ -121,7 +121,7 @@ def format_user(user):
     if user is None:
         return "Anonymous"
     return (user['display_name'] + " (Bitbucket: [{0}]"
-            "(http://bitbucket.org/{0}), Github: [{0}](http://github.com/{0}))"
+            "(http://bitbucket.org/{0}), GitHub: [{0}](http://github.com/{0}))"
             .format(user['username']))
 
 
@@ -183,7 +183,7 @@ def format_date(bb_date):
     if m:
         return '{}T{}Z'.format(m.group(1), m.group(2))
 
-    raise RuntimeError('Could not parse date: {}'.format(bb_date))
+    raise RuntimeError("Could not parse date: {}".format(bb_date))
 
 
 def clean_body(body):
@@ -229,6 +229,7 @@ def clean_changesets(lines):
         if line.startswith("→ <<cset"):
             lines.pop(index)
 
+
 def get_issues(bb_url, start_id):
     """
     Fetch the issues from Bitbucket
@@ -239,13 +240,11 @@ def get_issues(bb_url, start_id):
     while True: # keep fetching additional pages of issues until all processed
         bb_issue_response = requests.get(bb_url,
                                 params={'sort': 'local_id', 'start': start_id})
-
         if bb_issue_response.status_code in (200, 202):
             result = bb_issue_response.json()
+            # check to see if there are issues to process, if not break out.
             if not result['issues']:
-                # Check to see if there are issues to process if not break out.
                 break
-
             issues += result['issues']
             start_id += len(result['issues'])
 
@@ -255,7 +254,6 @@ def get_issues(bb_url, start_id):
                 "Hint: the Bitbucket repository name is case-sensitive."
                 .format(url=url)
                 )
-
         elif bb_issue_response.status_code == 401:
             raise RuntimeError(
                 "Failed to login to Bitbucket."
@@ -263,7 +261,6 @@ def get_issues(bb_url, start_id):
                 "Bitbucket account until "
                 "https://bitbucket.org/site/master/issues/11774/ is resolved"
                 )
-
         else:
             raise RuntimeError(
                 "Bitbucket returned an unexpected HTTP status code: {code}"
@@ -275,7 +272,7 @@ def get_issues(bb_url, start_id):
 
 def get_issue_comments(issue, bb_url):
     """
-    Fetch the comments for a Bitbucket issue
+    Fetch the comments for the specified Bitbucket issue
     """
     url = "{bb_url}/{issue[local_id]}/comments/".format(**locals())
     # BB API always returns newest comments first, regardless of 'sort' param;
@@ -286,7 +283,7 @@ def get_issue_comments(issue, bb_url):
 
 def convert_issue(issue, options):
     """
-    Convert an issue from Bitbucket format to GitHub format
+    Convert an issue schema from Bitbucket to GitHub's Issue Import API
     """
     # Bitbucket issues have an 'is_spam' field that Akismet sets true/false.
     # they still need to be imported so that issue IDs stay sync'd
@@ -311,11 +308,11 @@ def convert_issue(issue, options):
 
 def convert_comment(comment, options):
     """
-    Convert an issue comment from Bitbucket format to GitHub format
+    Convert an issue comment from Bitbucket schema to GitHub's Issue Import API
+    schema. Bitbucket status comments (assigned, version, etc. changes) are not
+    imported to minimize noise.
     """
-    # Bitbucket status comments (assigned, version, etc. changes) are not
-    # imported to minimize noise. Easily filtered because they have no content.
-    if comment['content']:
+    if comment['content']: # BB status comments have no content
         return {
             'created_at': format_date(comment['utc_created_on']),
             'body': format_comment(comment, options),
@@ -324,7 +321,7 @@ def convert_comment(comment, options):
 
 def push_issue(issue, comments, github_repo, auth):
     """
-    Push a single issue to GitHub
+    Push a single issue to GitHub via their Issue Import API
     """
     # Importing via GitHub's normal Issue API quickly triggers anti-abuse rate
     # limits. So we use their dedicated Issue Import API instead:
@@ -337,8 +334,7 @@ def push_issue(issue, comments, github_repo, auth):
     respo = requests.post(url, json=issue_data, auth=auth, headers=headers)
     if respo.status_code in (200, 202):
         print("Created Bitbucket issue: {} [{} comments]".format(
-                                        issue['title'], len(comments))
-            )
+                                        issue['title'], len(comments)))
     elif respo.status_code == 401:
         raise RuntimeError(
             "Failed to login to GitHub. If your account has two-factor "
