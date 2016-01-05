@@ -49,9 +49,9 @@ Python 3's built-in `venv` tool:
 
 * The GitHub repository can be owned by either an individual or an organization.
 
-* In addition to normal label migration, this script also creates GitHub labels
-that map to the Bitbucket issue type (bug, task, etc). If you don't want these,
-just delete the new GitHub labels post-migration.
+* GitHub labels are created that map to the Bitbucket issue's priority, kind
+(bug, task, etc), component (if any, custom to each project), and version (if
+any). If you don't want these, just delete the new GitHub labels post-migration.
 
 * The migrated issues and issue comments are annotated with both Bitbucket and
 GitHub links to user who authored the comment/issue. This assumes the user

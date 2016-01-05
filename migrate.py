@@ -283,18 +283,17 @@ def convert_issue(issue, options):
     # Bitbucket issues have an 'is_spam' field that Akismet sets true/false.
     # they still need to be imported so that issue IDs stay sync'd
 
-    labels = []
-    if issue['metadata']['kind']:
-        labels.append(issue['metadata']['kind'])
-    if issue['metadata']['component']:
-        labels.append(issue['metadata']['component'])
+    labels = [issue['priority']]
+    for k, v in issue['metadata'].items():
+        if k in ['component', 'kind', 'version'] and v is not None:
+            labels.append(v)
 
     return {
         'title': issue['title'],
         'body': format_issue_body(issue, options),
         'closed': issue['status'] not in ('open', 'new'),
         'created_at': format_date(issue['utc_created_on']),
-        'labels': labels
+        'labels': labels,
         # GitHub Import API supports assignee, but we can't use it because
         # our mapping of BB users to GH users isn't 100% accurate
         # 'assignee': "jonmagic",
