@@ -234,7 +234,7 @@ def get_issues(bb_url, start_id):
 
     while True: # keep fetching additional pages of issues until all processed
         bb_issue_response = requests.get(bb_url,
-                                params={'sort': 'local_id', 'start': start_id})
+                params={'sort': 'local_id', 'start': start_id, 'limit': 50})
         if bb_issue_response.status_code in (200, 202):
             result = bb_issue_response.json()
             # check to see if there are issues to process, if not break out.
