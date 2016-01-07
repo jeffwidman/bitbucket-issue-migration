@@ -23,6 +23,7 @@ import json
 import re
 import requests
 import sys
+import time
 
 
 def read_arguments():
@@ -104,7 +105,19 @@ def main(options):
             print("\nIssue:", issue)
             print("\nComments: ", comments)
         else:
-            push_issue(issue, comments, options.github_repo, gh_auth)
+            # GitHub's Import API currently requires a special header
+            headers = {'Accept': 'application/vnd.github.golden-comet-preview+json'}
+            respo = push_github_issue(issue, comments, options.github_repo,
+                    gh_auth, headers)
+            # issue POSTed successfully, now verify the import finished before
+            # continuing. Otherwise, we risk issue IDs not being sync'd between
+            # Bitbucket and GitHub because GitHub processes the data in the
+            # background, so IDs can be out of order if two issues are POSTed
+            # and the latter finishes before the former. For example, if the
+            # former had a bunch more comments to be processed.
+            # https://github.com/jeffwidman/bitbucket-issue-migration/issues/45
+            status_url = respo.json()['url']
+            verify_github_issue_import_finished(status_url, gh_auth, headers)
         print("Completed {} of {} issues".format(index + 1, len(issues)))
 
 
@@ -319,22 +332,21 @@ def convert_comment(comment, options):
             }
 
 
-def push_issue(issue, comments, github_repo, auth):
+def push_github_issue(issue, comments, github_repo, auth, headers):
     """
-    Push a single issue to GitHub via their Issue Import API
+    Push a single issue to GitHub.
+
+    Importing via GitHub's normal Issue API quickly triggers anti-abuse rate
+    limits. So we use their dedicated Issue Import API instead:
+    https://gist.github.com/jonmagic/5282384165e0f86ef105
+    https://github.com/nicoddemus/bitbucket_issue_migration/issues/1
     """
-    # Importing via GitHub's normal Issue API quickly triggers anti-abuse rate
-    # limits. So we use their dedicated Issue Import API instead:
-    # https://github.com/nicoddemus/bitbucket_issue_migration/issues/1
-    # https://gist.github.com/jonmagic/5282384165e0f86ef105
     issue_data = {'issue': issue, 'comments': comments}
     url = 'https://api.github.com/repos/{repo}/import/issues'.format(
-        repo=github_repo)
-    headers = {'Accept': 'application/vnd.github.golden-comet-preview+json'}
+            repo=github_repo)
     respo = requests.post(url, json=issue_data, auth=auth, headers=headers)
-    if respo.status_code in (200, 202):
-        print("Created Bitbucket issue: {} [{} comments]".format(
-                                        issue['title'], len(comments)))
+    if respo.status_code == 202:
+        return respo
     elif respo.status_code == 401:
         raise RuntimeError(
             "Failed to login to GitHub. If your account has two-factor "
@@ -342,8 +354,48 @@ def push_issue(issue, comments, github_repo, auth):
             "https://github.com/settings/tokens in place of a password for "
             "this script.\n"
             )
+    elif respo.status_code == 422:
+        raise RuntimeError(
+            "Initial import validation failed for issue '{}' due to the "
+            "following errors:\n{}".format(issue['title'], respo.json())
+            )
     else:
-        raise RuntimeError("Failed to create issue: {}".format(issue['title']))
+        raise RuntimeError(
+            "Failed to POST issue: '{}' due to unexpected HTTP status code: {}"
+            .format(issue['title'], respo.status_code)
+            )
+
+
+def verify_github_issue_import_finished(status_url, auth, headers):
+    """
+    Checks the status of a GitHub issue import. If the status is 'pending',
+    it sleeps, then rechecks until the status is either 'imported' or 'failed'.
+    """
+    while True: # keep checking until status is something other than 'pending'
+        respo = requests.get(status_url, auth=auth, headers=headers)
+        if respo.status_code != 200:
+            raise RuntimeError(
+                "Failed to check GitHub issue import status url: {} due to "
+                "unexpected HTTP status code: {}"
+                .format(status_url, respo.status_code)
+                )
+        status = respo.json()['status']
+        if status != 'pending':
+            break
+        time.sleep(1)
+    if status == 'imported':
+        print("Imported Issue:", respo.json()['issue_url'])
+    elif status == 'failed':
+        raise RuntimeError(
+            "Failed to import GitHub issue due to the following errors:\n{}"
+            .format(respo.json())
+            )
+    else:
+        raise RuntimeError(
+            "Status check for GitHub issue import returned unexpected status: "
+            "'{}'"
+            .format(status)
+            )
 
 
 if __name__ == "__main__":
