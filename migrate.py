@@ -246,23 +246,25 @@ def get_issues(bb_url, start_id):
     issues = []
 
     while True: # keep fetching additional pages of issues until all processed
-        bb_issue_response = requests.get(bb_url,
-                params={'sort': 'local_id', 'start': start_id, 'limit': 50})
-        if bb_issue_response.status_code in (200, 202):
-            result = bb_issue_response.json()
+        respo = requests.get(
+                    bb_url,
+                    params={'sort': 'local_id', 'start': start_id, 'limit': 50}
+                    )
+        if respo.status_code == 200:
+            result = respo.json()
             # check to see if there are issues to process, if not break out.
             if not result['issues']:
                 break
             issues += result['issues']
             start_id += len(result['issues'])
 
-        elif bb_issue_response.status_code == 404:
+        elif respo.status_code == 404:
             raise RuntimeError(
                 "Could not find the Bitbucket repository: {url}\n"
                 "Hint: the Bitbucket repository name is case-sensitive."
                 .format(url=url)
                 )
-        elif bb_issue_response.status_code == 401:
+        elif respo.status_code == 401:
             raise RuntimeError(
                 "Failed to login to Bitbucket."
                 "Hint: You must disable two-factor authentication on your "
@@ -272,7 +274,7 @@ def get_issues(bb_url, start_id):
         else:
             raise RuntimeError(
                 "Bitbucket returned an unexpected HTTP status code: {code}"
-                .format(bb_issue_response.status_code)
+                .format(respo.status_code)
                 )
 
     return issues
