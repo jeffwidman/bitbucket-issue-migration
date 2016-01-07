@@ -94,7 +94,7 @@ def main(options):
 
     issues = get_issues(bb_url, options.start_id)
     for index, issue in enumerate(issues):
-        comments = get_issue_comments(issue, bb_url)
+        comments = get_issue_comments(issue['local_id'], bb_url)
         # issue can't be converted until comments are retrieved because need
         # access to issue['local_id'] for retrieving comments
         issue = convert_issue(issue, options)
@@ -278,15 +278,22 @@ def get_issues(bb_url, start_id):
     return issues
 
 
-def get_issue_comments(issue, bb_url):
+def get_issue_comments(issue_id, bb_url):
     """
     Fetch the comments for the specified Bitbucket issue
     """
-    url = "{bb_url}/{issue[local_id]}/comments/".format(**locals())
+    url = "{bb_url}/{issue_id}/comments/".format(**locals())
     # BB API always returns newest comments first, regardless of 'sort' param;
     # however, comment order doesn't matter because we don't care about
-    # comment IDs and GitHub orders by creation date when displaying.
-    return requests.get(url).json()
+    # comment IDs and GitHub sorts by creation date when displaying.
+    respo = requests.get(url)
+    if respo.status_code != 200:
+        raise RuntimeError(
+            "Failed to get issue comments from: {} due to unexpected HTTP "
+            "status code: {}"
+            .format(url, respo.status_code)
+            )
+    return respo.json()
 
 
 def convert_issue(issue, options):
