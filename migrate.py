@@ -276,7 +276,8 @@ def get_issues(bb_url, start_id):
                 "Bitbucket returned an unexpected HTTP status code: {code}"
                 .format(respo.status_code)
                 )
-
+    # BB returns a 'count' param that is the total number of issues
+    assert len(issues) == result['count']
     return issues
 
 
