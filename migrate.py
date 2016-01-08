@@ -95,20 +95,19 @@ def main(options):
     issues = get_issues(bb_url, options.start_id)
     for index, issue in enumerate(issues):
         comments = get_issue_comments(issue['local_id'], bb_url)
-        # issue can't be converted until comments are retrieved because need
-        # access to issue['local_id'] for retrieving comments
-        issue = convert_issue(issue, options)
-        comments = [convert_comment(c, options) for c in comments
+        gh_issue = convert_issue(issue, options)
+        gh_comments = [convert_comment(c, options) for c in comments
                                 if convert_comment(c, options) is not None]
 
         if options.dry_run:
-            print("\nIssue:", issue)
-            print("\nComments: ", comments)
+            print("\nIssue: ", gh_issue)
+            print("\nComments: ", gh_comments)
         else:
             # GitHub's Import API currently requires a special header
             headers = {'Accept': 'application/vnd.github.golden-comet-preview+json'}
-            respo = push_github_issue(issue, comments, options.github_repo,
-                    gh_auth, headers)
+            push_respo = push_github_issue(
+                gh_issue, gh_comments, options.github_repo, gh_auth, headers
+                )
             # issue POSTed successfully, now verify the import finished before
             # continuing. Otherwise, we risk issue IDs not being sync'd between
             # Bitbucket and GitHub because GitHub processes the data in the
@@ -116,8 +115,15 @@ def main(options):
             # and the latter finishes before the former. For example, if the
             # former had a bunch more comments to be processed.
             # https://github.com/jeffwidman/bitbucket-issue-migration/issues/45
-            status_url = respo.json()['url']
-            verify_github_issue_import_finished(status_url, gh_auth, headers)
+            status_url = push_respo.json()['url']
+            gh_issue_url = verify_github_issue_import_finished(
+                status_url, gh_auth, headers
+                ).json()['issue_url']
+            # verify GH & BB issue IDs match
+            # if this fails, format_links() will have incorrect output
+            # this will fail if the GH repository has pre-existing issues
+            gh_issue_id = int(gh_issue_url.split('/')[-1])
+            assert gh_issue_id == issue['local_id']
         print("Completed {} of {} issues".format(index + 1, len(issues)))
 
 
@@ -406,6 +412,7 @@ def verify_github_issue_import_finished(status_url, auth, headers):
             "'{}'"
             .format(status)
             )
+    return respo
 
 
 if __name__ == "__main__":
