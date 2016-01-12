@@ -70,8 +70,15 @@ def read_arguments():
     )
 
     parser.add_argument(
-        "-f", "--start_id", type=int, dest="start_id", default=1,
-        help="Bitbucket issue ID from which to start the import"
+        "-f", "--start", type=int, dest="start", default=0,
+        help=(
+            "The list index of the Bitbucket issue from which to start the "
+            "import. Note: Normally this matches the issue ID minus one "
+            "(to account for zero-based indexing). However, if issues were "
+            "deleted in the past from the BB repo, the list index of the issue "
+            "will decrease due to the missing issues without a corresponding "
+            "decrease in the issue ID."
+        )
     )
 
     return parser.parse_args()
@@ -91,8 +98,8 @@ def main(options):
         "in place of a password for this script.\n"
         )
     gh_auth = (options.github_username, github_password)
+    issues = get_issues(bb_url, options.start)
 
-    issues = get_issues(bb_url, options.start_id)
     for index, issue in enumerate(issues):
         comments = get_issue_comments(issue['local_id'], bb_url)
         gh_issue = convert_issue(issue, options)
@@ -244,25 +251,25 @@ def clean_changesets(lines):
             lines.pop(index)
 
 
-def get_issues(bb_url, start_id):
+def get_issues(bb_url, start):
     """
     Fetch the issues from Bitbucket
     """
-    start_id -= 1 # BB API sorting uses 0-based indexing
     issues = []
 
     while True: # keep fetching additional pages of issues until all processed
         respo = requests.get(
                     bb_url,
-                    params={'sort': 'local_id', 'start': start_id, 'limit': 50}
-                    )
+                    params={'sort': 'local_id', 'start': start, 'limit': 50})
         if respo.status_code == 200:
             result = respo.json()
             # check to see if there are issues to process, if not break out.
             if not result['issues']:
                 break
             issues += result['issues']
-            start_id += len(result['issues'])
+            # 'start' is the current list index of the issue, not the issue ID
+            start += len(result['issues'])
+
 
         elif respo.status_code == 404:
             raise RuntimeError(

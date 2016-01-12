@@ -40,10 +40,16 @@ Python 3's built-in `venv` tool:
     optional arguments:
       -h, --help            show this help message and exit
       -n, --dry-run         Perform a dry run and print everything.
-      -f START, --start_id START
-                            Bitbucket issue ID from which to start the import
+      -f START, --start START
+                            The list index of the Bitbucket issue from which to
+                            start the import. Note: Normally this matches the
+                            issue ID minus one (to account for zero-based
+                            indexing). However, if issues were deleted in the
+                            past from the BB repo, the list index of the issue
+                            will decrease due to the missing issues without a
+                            corresponding decrease in the issue ID.
 
-    $ python3 migrate.py -f 1 <bitbucket_username> <bitbucket_repo> <github_username> <github_repo>
+    $ python3 migrate.py <bitbucket_username> <bitbucket_repo> <github_username> <github_repo>
 
 ## Additional notes:
 
@@ -78,9 +84,7 @@ by the correct amount.
 * This script is not idempotent--re-running it will leave the first set of
 imported issues intact, and then create a duplicate set of imported issues after
 the first set. If you want to re-run the import, it's best to delete your GitHub
-repo and start over so that the GitHub issue IDs start from 1. Alternatively, if
-an import breaks midway, you can restart from the breakage point using the
-`--start_id` option.
+repo and start over so that the GitHub issue IDs start from 1.
 
 * The maximum allowable size per individual issue is 1MB. This limit is
 imposed by GitHub's
