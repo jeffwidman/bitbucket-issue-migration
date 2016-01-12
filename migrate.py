@@ -25,6 +25,13 @@ import requests
 import sys
 import time
 
+try:
+    import keyring
+except ImportError:
+    # keyring isn't available, so mock the interface to simulate no pw
+    class keyring:
+        get_password = staticmethod(lambda system, username: None)
+
 
 def read_arguments():
     parser = argparse.ArgumentParser(
@@ -90,8 +97,9 @@ def main(options):
     bb_url = "https://api.bitbucket.org/1.0/repositories/{repo}/issues".format(
         repo=options.bitbucket_repo)
 
-    # ask for password upfront so the user doesn't have to sit around waiting
-    github_password = getpass.getpass(
+    # resolve password upfront so the user isn't prompted later
+    kr_pass = keyring.get_password('Github', options.github_username)
+    github_password = kr_pass or getpass.getpass(
         "Please enter your GitHub password.\n"
         "Note: If your account has two-factor authentication enabled, you must "
         "use a personal access token from https://github.com/settings/tokens "
