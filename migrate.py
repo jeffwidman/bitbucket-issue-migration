@@ -94,7 +94,8 @@ def main(options):
     """
     Main entry point for the script.
     """
-    bb_url = "https://api.bitbucket.org/1.0/repositories/{repo}/issues".format(
+    bb_url = "https://api.bitbucket.org/1.0/repositories/{account}/{repo}/issues".format(
+        account=options.bitbucket_username,
         repo=options.bitbucket_repo)
 
     # resolve password upfront so the user isn't prompted later
@@ -283,7 +284,7 @@ def get_issues(bb_url, start):
             raise RuntimeError(
                 "Could not find the Bitbucket repository: {url}\n"
                 "Hint: the Bitbucket repository name is case-sensitive."
-                .format(url=url)
+                .format(url=bb_url)
                 )
         elif respo.status_code == 401:
             raise RuntimeError(
@@ -295,7 +296,7 @@ def get_issues(bb_url, start):
         else:
             raise RuntimeError(
                 "Bitbucket returned an unexpected HTTP status code: {code}"
-                .format(respo.status_code)
+                .format(code=respo.status_code)
                 )
     # BB returns a 'count' param that is the total number of issues
     assert len(issues) == result['count']
