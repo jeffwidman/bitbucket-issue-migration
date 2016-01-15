@@ -283,7 +283,7 @@ def get_issues(bb_url, start):
             raise RuntimeError(
                 "Could not find the Bitbucket repository: {url}\n"
                 "Hint: the Bitbucket repository name is case-sensitive."
-                .format(url=url)
+                .format(url=bb_url)
                 )
         elif respo.status_code == 401:
             raise RuntimeError(
