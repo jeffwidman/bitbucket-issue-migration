@@ -104,7 +104,7 @@ def main(options):
         "Note: If your account has two-factor authentication enabled, you must "
         "use a personal access token from https://github.com/settings/tokens "
         "in place of a password for this script.\n"
-        )
+    )
     gh_auth = (options.github_username, github_password)
     issues = get_issues(bb_url, options.start)
 
@@ -122,7 +122,7 @@ def main(options):
             headers = {'Accept': 'application/vnd.github.golden-comet-preview+json'}
             push_respo = push_github_issue(
                 gh_issue, gh_comments, options.github_repo, gh_auth, headers
-                )
+            )
             # issue POSTed successfully, now verify the import finished before
             # continuing. Otherwise, we risk issue IDs not being sync'd between
             # Bitbucket and GitHub because GitHub processes the data in the
@@ -154,9 +154,11 @@ def format_user(user):
     # 'reported_by' key, so just be sure to pass in None
     if user is None:
         return "Anonymous"
-    return (user['display_name'] + " (Bitbucket: [{0}]"
-            "(http://bitbucket.org/{0}), GitHub: [{0}](http://github.com/{0}))"
-            .format(user['username']))
+    return (
+        user['display_name'] + " (Bitbucket: [{0}](http://bitbucket.org/{0}), "
+        "GitHub: [{0}](http://github.com/{0}))"
+        .format(user['username'])
+    )
 
 
 def format_issue_body(issue, options):
@@ -278,25 +280,24 @@ def get_issues(bb_url, start):
             # 'start' is the current list index of the issue, not the issue ID
             start += len(result['issues'])
 
-
-        elif respo.status_code == 404:
-            raise RuntimeError(
-                "Could not find the Bitbucket repository: {url}\n"
-                "Hint: the Bitbucket repository name is case-sensitive."
-                .format(url=url)
-                )
         elif respo.status_code == 401:
             raise RuntimeError(
                 "Failed to login to Bitbucket."
                 "Hint: You must disable two-factor authentication on your "
                 "Bitbucket account until "
                 "https://bitbucket.org/site/master/issues/11774/ is resolved"
-                )
+            )
+        elif respo.status_code == 404:
+            raise RuntimeError(
+                "Could not find the Bitbucket repository: {}\n"
+                "Hint: the Bitbucket repository name is case-sensitive."
+                .format(bb_url)
+            )
         else:
             raise RuntimeError(
-                "Bitbucket returned an unexpected HTTP status code: {code}"
+                "Bitbucket returned an unexpected HTTP status code: {}"
                 .format(respo.status_code)
-                )
+            )
     # BB returns a 'count' param that is the total number of issues
     assert len(issues) == result['count']
     return issues
@@ -316,7 +317,7 @@ def get_issue_comments(issue_id, bb_url):
             "Failed to get issue comments from: {} due to unexpected HTTP "
             "status code: {}"
             .format(url, respo.status_code)
-            )
+        )
     return respo.json()
 
 
@@ -347,7 +348,7 @@ def convert_issue(issue, options):
         # GitHub Import API supports assignee, but we can't use it because
         # our mapping of BB users to GH users isn't 100% accurate
         # 'assignee': "jonmagic",
-        }
+    }
 
 
 def convert_comment(comment, options):
@@ -360,7 +361,7 @@ def convert_comment(comment, options):
         return {
             'created_at': format_date(comment['utc_created_on']),
             'body': format_comment_body(comment, options),
-            }
+        }
 
 
 def push_github_issue(issue, comments, github_repo, auth, headers):
@@ -384,17 +385,17 @@ def push_github_issue(issue, comments, github_repo, auth, headers):
             "authentication enabled, you must use a personal access token from "
             "https://github.com/settings/tokens in place of a password for "
             "this script.\n"
-            )
+        )
     elif respo.status_code == 422:
         raise RuntimeError(
             "Initial import validation failed for issue '{}' due to the "
             "following errors:\n{}".format(issue['title'], respo.json())
-            )
+        )
     else:
         raise RuntimeError(
             "Failed to POST issue: '{}' due to unexpected HTTP status code: {}"
             .format(issue['title'], respo.status_code)
-            )
+        )
 
 
 def verify_github_issue_import_finished(status_url, auth, headers):
@@ -409,7 +410,7 @@ def verify_github_issue_import_finished(status_url, auth, headers):
                 "Failed to check GitHub issue import status url: {} due to "
                 "unexpected HTTP status code: {}"
                 .format(status_url, respo.status_code)
-                )
+            )
         status = respo.json()['status']
         if status != 'pending':
             break
@@ -420,13 +421,13 @@ def verify_github_issue_import_finished(status_url, auth, headers):
         raise RuntimeError(
             "Failed to import GitHub issue due to the following errors:\n{}"
             .format(respo.json())
-            )
+        )
     else:
         raise RuntimeError(
             "Status check for GitHub issue import returned unexpected status: "
             "'{}'"
             .format(status)
-            )
+        )
     return respo
 
 
