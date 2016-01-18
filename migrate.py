@@ -135,14 +135,13 @@ def main(options):
                 status_url, gh_auth, headers
                 ).json()['issue_url']
             # verify GH & BB issue IDs match
-            # if this fails, format_links() will have incorrect output
+            # if this fails, convert_links() will have incorrect output
             # this will fail if the GH repository has pre-existing issues
             gh_issue_id = int(gh_issue_url.split('/')[-1])
             assert gh_issue_id == issue['local_id']
         print("Completed {} of {} issues".format(index + 1, len(issues)))
 
 
-# Formatters
 def format_user(user):
     """
     Format a Bitbucket user's info into a string containing either 'Anonymous'
@@ -162,9 +161,9 @@ def format_user(user):
 
 
 def format_issue_body(issue, options):
-    content = clean_changesets(issue['content'])
+    content = convert_changesets(issue['content'])
     content = convert_creole_braces(content)
-    content = format_links(content, options)
+    content = convert_links(content, options)
     return """Originally reported by: **{reporter}**
 
 {sep}
@@ -184,9 +183,9 @@ def format_issue_body(issue, options):
 
 
 def format_comment_body(comment, options):
-    content = clean_changesets(comment['content'])
+    content = convert_changesets(comment['content'])
     content = convert_creole_braces(content)
-    content = format_links(content, options)
+    content = convert_links(content, options)
     return """*Original comment by* **{author}**:
 
 {sep}
@@ -199,7 +198,7 @@ def format_comment_body(comment, options):
     )
 
 
-def format_links(content, options):
+def convert_links(content, options):
     """
     Convert explicit links found in the body of a comment or issue to use
     relative links ("#<id>").
@@ -209,7 +208,7 @@ def format_links(content, options):
     return re.sub(pattern, r'#\1', content)
 
 
-def format_date(bb_date):
+def convert_date(bb_date):
     """
     Convert the date from Bitbucket format to GitHub format
     """
@@ -247,9 +246,9 @@ def convert_creole_braces(body):
     return "\n".join(lines)
 
 
-def clean_changesets(body):
+def convert_changesets(body):
     """
-    Clean changeset references like:
+    Remove changeset references like:
 
         → <<cset 22f3981d50c8>>'
 
@@ -337,7 +336,7 @@ def convert_issue(issue, options):
         'title': issue['title'],
         'body': format_issue_body(issue, options),
         'closed': issue['status'] not in ('open', 'new'),
-        'created_at': format_date(issue['utc_created_on']),
+        'created_at': convert_date(issue['utc_created_on']),
         'labels': labels,
         # milestones are supported by both BB and GH APIs. Need to provide a
         # mapping from milestone titles in BB to milestone IDs in GH. The
@@ -359,7 +358,7 @@ def convert_comment(comment, options):
     """
     if comment['content']: # BB status comments have no content
         return {
-            'created_at': format_date(comment['utc_created_on']),
+            'created_at': convert_date(comment['utc_created_on']),
             'body': format_comment_body(comment, options),
         }
 
