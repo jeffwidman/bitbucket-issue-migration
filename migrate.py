@@ -162,8 +162,7 @@ def format_user(user):
 
 
 def format_issue_body(issue, options):
-    content = clean_body(issue['content'])
-    content = format_links(content, options)
+    content = clean_changesets(clean_body(issue['content']))
     return """Originally reported by: **{reporter}**
 
 {sep}
@@ -176,7 +175,7 @@ def format_issue_body(issue, options):
         # anonymous issues are missing 'reported_by' key
         reporter=format_user(issue.get('reported_by', None)),
         sep='-' * 40,
-        content=content,
+        content=format_links(content, options),
         repo=options.bitbucket_repo,
         id=issue['local_id'],
     )
@@ -191,7 +190,7 @@ def format_comment_body(comment, options):
 """.format(
         author=format_user(comment['author_info']),
         sep='-' * 40,
-        content=format_links(clean_comment(comment['content']), options),
+        content=format_links(clean_changesets(comment['content']), options),
     )
 
 
@@ -236,18 +235,10 @@ def clean_body(body):
                 lines.append("    " + line)
             else:
                 lines.append(line.replace("{{{", "`").replace("}}}", "`"))
-
-    clean_changesets(lines)
     return "\n".join(lines)
 
 
-def clean_comment(body):
-    lines = body.splitlines()
-    clean_changesets(lines)
-    return "\n".join(lines)
-
-
-def clean_changesets(lines):
+def clean_changesets(body):
     """
     Clean changeset references like:
 
@@ -256,9 +247,9 @@ def clean_changesets(lines):
     Since they point to mercurial changesets and there's no easy way to map them
     to git hashes, better to remove them altogether.
     """
-    for index, line in reversed(list(enumerate(lines))):
-        if line.startswith("→ <<cset"):
-            lines.pop(index)
+    lines = body.splitlines()
+    filtered_lines = [l for l in lines if not l.startswith("→ <<cset")]
+    return "\n".join(filtered_lines)
 
 
 def get_issues(bb_url, start):
