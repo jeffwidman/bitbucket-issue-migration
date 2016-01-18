@@ -142,124 +142,6 @@ def main(options):
         print("Completed {} of {} issues".format(index + 1, len(issues)))
 
 
-def format_user(user):
-    """
-    Format a Bitbucket user's info into a string containing either 'Anonymous'
-    or their name and links to their Bitbucket and GitHub profiles.
-    The GitHub profile link may be incorrect because it assumes they reused
-    their Bitbucket username on GitHub.
-    """
-    # anonymous comments have null 'author_info', anonymous issues don't have
-    # 'reported_by' key, so just be sure to pass in None
-    if user is None:
-        return "Anonymous"
-    return (
-        user['display_name'] + " (Bitbucket: [{0}](http://bitbucket.org/{0}), "
-        "GitHub: [{0}](http://github.com/{0}))"
-        .format(user['username'])
-    )
-
-
-def format_issue_body(issue, options):
-    content = convert_changesets(issue['content'])
-    content = convert_creole_braces(content)
-    content = convert_links(content, options)
-    return """Originally reported by: **{reporter}**
-
-{sep}
-
-{content}
-
-{sep}
-- Bitbucket: https://bitbucket.org/{repo}/issue/{id}
-""".format(
-        # anonymous issues are missing 'reported_by' key
-        reporter=format_user(issue.get('reported_by', None)),
-        sep='-' * 40,
-        content=content,
-        repo=options.bitbucket_repo,
-        id=issue['local_id'],
-    )
-
-
-def format_comment_body(comment, options):
-    content = convert_changesets(comment['content'])
-    content = convert_creole_braces(content)
-    content = convert_links(content, options)
-    return """*Original comment by* **{author}**:
-
-{sep}
-
-{content}
-""".format(
-        author=format_user(comment['author_info']),
-        sep='-' * 40,
-        content=content
-    )
-
-
-def convert_links(content, options):
-    """
-    Convert explicit links found in the body of a comment or issue to use
-    relative links ("#<id>").
-    """
-    pattern = r'https://bitbucket.org/{repo}/issue/(\d+)'.format(
-            repo=options.bitbucket_repo)
-    return re.sub(pattern, r'#\1', content)
-
-
-def convert_date(bb_date):
-    """
-    Convert the date from Bitbucket format to GitHub format
-    """
-    # '2012-11-26 09:59:39+00:00'
-    m = re.search(r'(\d\d\d\d-\d\d-\d\d) (\d\d:\d\d:\d\d)', bb_date)
-    if m:
-        return '{}T{}Z'.format(m.group(1), m.group(2))
-
-    raise RuntimeError("Could not parse date: {}".format(bb_date))
-
-
-def convert_creole_braces(body):
-    """
-    Convert Creole code blocks that are wrapped in "{{{" and "}}}" to standard
-    Markdown code formatting using "`" for inline code and four-space
-    indentation for code blocks.
-    """
-    lines = []
-    in_block = False
-    for line in body.splitlines():
-        if line.startswith("{{{") or line.startswith("}}}"):
-            if "{{{" in line:
-                _, _, after = line.partition("{{{")
-                lines.append('    ' + after)
-                in_block = True
-            if "}}}" in line:
-                before, _, _ = line.partition("}}}")
-                lines.append('    ' + before)
-                in_block = False
-        else:
-            if in_block:
-                lines.append("    " + line)
-            else:
-                lines.append(line.replace("{{{", "`").replace("}}}", "`"))
-    return "\n".join(lines)
-
-
-def convert_changesets(body):
-    """
-    Remove changeset references like:
-
-        → <<cset 22f3981d50c8>>'
-
-    Since they point to mercurial changesets and there's no easy way to map them
-    to git hashes, better to remove them altogether.
-    """
-    lines = body.splitlines()
-    filtered_lines = [l for l in lines if not l.startswith("→ <<cset")]
-    return "\n".join(filtered_lines)
-
-
 def get_issues(bb_url, start):
     """
     Fetch the issues from Bitbucket
@@ -361,6 +243,124 @@ def convert_comment(comment, options):
             'created_at': convert_date(comment['utc_created_on']),
             'body': format_comment_body(comment, options),
         }
+
+
+def format_issue_body(issue, options):
+    content = convert_changesets(issue['content'])
+    content = convert_creole_braces(content)
+    content = convert_links(content, options)
+    return """Originally reported by: **{reporter}**
+
+{sep}
+
+{content}
+
+{sep}
+- Bitbucket: https://bitbucket.org/{repo}/issue/{id}
+""".format(
+        # anonymous issues are missing 'reported_by' key
+        reporter=format_user(issue.get('reported_by', None)),
+        sep='-' * 40,
+        content=content,
+        repo=options.bitbucket_repo,
+        id=issue['local_id'],
+    )
+
+
+def format_comment_body(comment, options):
+    content = convert_changesets(comment['content'])
+    content = convert_creole_braces(content)
+    content = convert_links(content, options)
+    return """*Original comment by* **{author}**:
+
+{sep}
+
+{content}
+""".format(
+        author=format_user(comment['author_info']),
+        sep='-' * 40,
+        content=content
+    )
+
+
+def format_user(user):
+    """
+    Format a Bitbucket user's info into a string containing either 'Anonymous'
+    or their name and links to their Bitbucket and GitHub profiles.
+    The GitHub profile link may be incorrect because it assumes they reused
+    their Bitbucket username on GitHub.
+    """
+    # anonymous comments have null 'author_info', anonymous issues don't have
+    # 'reported_by' key, so just be sure to pass in None
+    if user is None:
+        return "Anonymous"
+    return (
+        user['display_name'] + " (Bitbucket: [{0}](http://bitbucket.org/{0}), "
+        "GitHub: [{0}](http://github.com/{0}))"
+        .format(user['username'])
+    )
+
+
+def convert_date(bb_date):
+    """
+    Convert the date from Bitbucket format to GitHub format
+    """
+    # '2012-11-26 09:59:39+00:00'
+    m = re.search(r'(\d\d\d\d-\d\d-\d\d) (\d\d:\d\d:\d\d)', bb_date)
+    if m:
+        return '{}T{}Z'.format(m.group(1), m.group(2))
+
+    raise RuntimeError("Could not parse date: {}".format(bb_date))
+
+
+def convert_changesets(body):
+    """
+    Remove changeset references like:
+
+        → <<cset 22f3981d50c8>>'
+
+    Since they point to mercurial changesets and there's no easy way to map them
+    to git hashes, better to remove them altogether.
+    """
+    lines = body.splitlines()
+    filtered_lines = [l for l in lines if not l.startswith("→ <<cset")]
+    return "\n".join(filtered_lines)
+
+
+def convert_creole_braces(body):
+    """
+    Convert Creole code blocks that are wrapped in "{{{" and "}}}" to standard
+    Markdown code formatting using "`" for inline code and four-space
+    indentation for code blocks.
+    """
+    lines = []
+    in_block = False
+    for line in body.splitlines():
+        if line.startswith("{{{") or line.startswith("}}}"):
+            if "{{{" in line:
+                _, _, after = line.partition("{{{")
+                lines.append('    ' + after)
+                in_block = True
+            if "}}}" in line:
+                before, _, _ = line.partition("}}}")
+                lines.append('    ' + before)
+                in_block = False
+        else:
+            if in_block:
+                lines.append("    " + line)
+            else:
+                lines.append(line.replace("{{{", "`").replace("}}}", "`"))
+    return "\n".join(lines)
+
+
+def convert_links(content, options):
+    """
+    Convert explicit links found in the body of a comment or issue to use
+    relative links ("#<id>").
+    """
+    pattern = r'https://bitbucket.org/{repo}/issue/(\d+)'.format(
+            repo=options.bitbucket_repo)
+    return re.sub(pattern, r'#\1', content)
 
 
 def push_github_issue(issue, comments, github_repo, auth, headers):
