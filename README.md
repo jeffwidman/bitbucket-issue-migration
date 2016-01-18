@@ -14,7 +14,7 @@ Python 3's built-in `venv` tool:
     $ source ./py3/bin/activate
     $ pip3 install -r requirements.pip
 
-## Example:
+## Parameters:
 
     $ python3 migrate.py -h
 
@@ -50,6 +50,12 @@ Python 3's built-in `venv` tool:
                             corresponding decrease in the issue ID.
 
     $ python3 migrate.py <bitbucket_username> <bitbucket_repo> <github_username> <github_repo>
+
+## Example:
+
+For example, to export the SQLAlchemy issue tracker to the repo http://github.com/jeffwidman/testing:
+
+    $ python3 migrate.py jeffwidman zzzeek/sqlalchemy jeffwidman jeffwidman/testing
 
 ## Additional notes:
 
