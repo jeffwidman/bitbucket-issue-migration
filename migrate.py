@@ -162,7 +162,9 @@ def format_user(user):
 
 
 def format_issue_body(issue, options):
-    content = clean_changesets(clean_body(issue['content']))
+    content = clean_changesets(issue['content'])
+    content = convert_creole_braces(content)
+    content = format_links(content, options)
     return """Originally reported by: **{reporter}**
 
 {sep}
@@ -175,13 +177,16 @@ def format_issue_body(issue, options):
         # anonymous issues are missing 'reported_by' key
         reporter=format_user(issue.get('reported_by', None)),
         sep='-' * 40,
-        content=format_links(content, options),
+        content=content,
         repo=options.bitbucket_repo,
         id=issue['local_id'],
     )
 
 
 def format_comment_body(comment, options):
+    content = clean_changesets(comment['content'])
+    content = convert_creole_braces(content)
+    content = format_links(content, options)
     return """*Original comment by* **{author}**:
 
 {sep}
@@ -190,7 +195,7 @@ def format_comment_body(comment, options):
 """.format(
         author=format_user(comment['author_info']),
         sep='-' * 40,
-        content=format_links(clean_changesets(comment['content']), options),
+        content=content
     )
 
 
@@ -216,18 +221,22 @@ def format_date(bb_date):
     raise RuntimeError("Could not parse date: {}".format(bb_date))
 
 
-def clean_body(body):
+def convert_creole_braces(body):
+    """
+    Convert Creole code blocks that are wrapped in "{{{" and "}}}" to standard
+    Markdown code formatting using "`" for inline code and four-space
+    indentation for code blocks.
+    """
     lines = []
     in_block = False
     for line in body.splitlines():
         if line.startswith("{{{") or line.startswith("}}}"):
             if "{{{" in line:
-                before, part, after = line.partition("{{{")
+                _, _, after = line.partition("{{{")
                 lines.append('    ' + after)
                 in_block = True
-
             if "}}}" in line:
-                before, part, after = line.partition("}}}")
+                before, _, _ = line.partition("}}}")
                 lines.append('    ' + before)
                 in_block = False
         else:
