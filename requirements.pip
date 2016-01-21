@@ -1,1 +1,5 @@
 requests
+
+# Optional dependency for pulling login credentials from the system keyring.
+# Script will run fine without it.
+keyring
