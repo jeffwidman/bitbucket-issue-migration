@@ -98,6 +98,10 @@ def main(options):
         repo=options.bitbucket_repo)
 
     # resolve password upfront so the user isn't prompted later
+    kr_pass_bb = keyring.get_password('Bitbucket', options.bitbucket_username)
+    bitbucket_password = kr_pass_bb or getpass.getpass(
+        "Please enter your Bitbucket password.\n"
+    )
     kr_pass = keyring.get_password('Github', options.github_username)
     github_password = kr_pass or getpass.getpass(
         "Please enter your GitHub password.\n"
@@ -105,11 +109,12 @@ def main(options):
         "use a personal access token from https://github.com/settings/tokens "
         "in place of a password for this script.\n"
     )
+    bb_auth = (options.bitbucket_username, bitbucket_password)
     gh_auth = (options.github_username, github_password)
-    issues = get_issues(bb_url, options.start)
+    issues = get_issues(bb_url, options.start, bb_auth)
 
     for index, issue in enumerate(issues):
-        comments = get_issue_comments(issue['local_id'], bb_url)
+        comments = get_issue_comments(issue['local_id'], bb_url, bb_auth)
         gh_issue = convert_issue(issue, options)
         gh_comments = [convert_comment(c, options) for c in comments
                                 if convert_comment(c, options) is not None]
@@ -142,7 +147,7 @@ def main(options):
         print("Completed {} of {} issues".format(index + 1, len(issues)))
 
 
-def get_issues(bb_url, start):
+def get_issues(bb_url, start, bb_auth):
     """
     Fetch the issues from Bitbucket
     """
@@ -150,7 +155,7 @@ def get_issues(bb_url, start):
 
     while True: # keep fetching additional pages of issues until all processed
         respo = requests.get(
-                    bb_url,
+                    bb_url, auth=bb_auth,
                     params={'sort': 'local_id', 'start': start, 'limit': 50})
         if respo.status_code == 200:
             result = respo.json()
@@ -184,7 +189,7 @@ def get_issues(bb_url, start):
     return issues
 
 
-def get_issue_comments(issue_id, bb_url):
+def get_issue_comments(issue_id, bb_url, bb_auth):
     """
     Fetch the comments for the specified Bitbucket issue
     """
@@ -192,7 +197,7 @@ def get_issue_comments(issue_id, bb_url):
     # BB API always returns newest comments first, regardless of 'sort' param;
     # however, comment order doesn't matter because we don't care about
     # comment IDs and GitHub sorts by creation date when displaying.
-    respo = requests.get(url)
+    respo = requests.get(url, auth=bb_auth)
     if respo.status_code != 200:
         raise RuntimeError(
             "Failed to get issue comments from: {} due to unexpected HTTP "
