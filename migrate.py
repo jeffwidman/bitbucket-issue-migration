@@ -44,7 +44,10 @@ def read_arguments():
 
     parser.add_argument(
         "bitbucket_username",
-        help="Your Bitbucket username"
+        help=(
+            "Your Bitbucket username. This is used only for authentication, "
+            "not for the repository location."
+        )
     )
 
     parser.add_argument(
@@ -58,7 +61,10 @@ def read_arguments():
 
     parser.add_argument(
         "github_username",
-        help="Your GitHub username"
+        help=(
+            "Your GitHub username. This is used only for authentication, not "
+            "for the repository location."
+        )
     )
 
     parser.add_argument(
@@ -73,7 +79,7 @@ def read_arguments():
     parser.add_argument(
         "-n", "--dry-run",
         action="store_true", dest="dry_run", default=False,
-        help="Perform a dry run and print eveything."
+        help="Perform a dry run and print everything."
     )
 
     parser.add_argument(

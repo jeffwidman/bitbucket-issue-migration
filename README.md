@@ -30,15 +30,19 @@ It's probably easiest to install the dependencies using Python 3's built-in
     Note: The Bitbucket repository and issue tracker have to be public
 
     positional arguments:
-      bitbucket_username    Your Bitbucket username
+      bitbucket_username    Your Bitbucket username. This is used only for
+                            authentication, not for the repository location.
       bitbucket_repo        Bitbucket repository to pull issues from.
                             Format:
-                            <user or organization name>/<repo name> Example:
+                            <user or organization name>/<repo name>
+                            Example:
                             jeffwidman/bitbucket-issue-migration
-      github_username       Your GitHub username
+      github_username       Your GitHub username. This is used only for
+                            authentication, not for the repository location.
       github_repo           GitHub repository to add issues to.
                             Format:
-                            <user or organization name>/<repo name> Example:
+                            <user or organization name>/<repo name>
+                            Example:
                             jeffwidman/bitbucket-issue-migration
 
     optional arguments:
