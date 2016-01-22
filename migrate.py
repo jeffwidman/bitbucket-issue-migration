@@ -35,11 +35,7 @@ except ImportError:
 
 def read_arguments():
     parser = argparse.ArgumentParser(
-        description=(
-            "A tool to migrate issues from Bitbucket to GitHub.\n"
-            "Note: The Bitbucket repository and issue tracker have to be "
-            "public"
-        )
+        description = "A tool to migrate issues from Bitbucket to GitHub."
     )
 
     parser.add_argument(

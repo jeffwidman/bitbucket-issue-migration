@@ -2,8 +2,9 @@
 
 This is a small script that will migrate Bitbucket issues to a GitHub project.
 
-It will import issues (and close them as needed) and their comments. Labels
-are supported.
+It will import issues (and close them as needed) and their comments.
+Repositories can be public or private, owned by individuals or organizations.
+Labels are supported.
 
 ## Before running:
 
@@ -27,7 +28,6 @@ It's probably easiest to install the dependencies using Python 3's built-in
                       github_repo
 
     A tool to migrate issues from Bitbucket to GitHub.
-    Note: The Bitbucket repository and issue tracker have to be public
 
     positional arguments:
       bitbucket_username    Your Bitbucket username. This is used only for
@@ -66,8 +66,6 @@ For example, to export the SQLAlchemy issue tracker to the repo http://github.co
     $ python3 migrate.py jeffwidman zzzeek/sqlalchemy jeffwidman jeffwidman/testing
 
 ## Additional notes:
-
-* The GitHub repository can be owned by either an individual or an organization.
 
 * GitHub labels are created that map to the Bitbucket issue's priority, kind
 (bug, task, etc), component (if any, custom to each project), and version (if
