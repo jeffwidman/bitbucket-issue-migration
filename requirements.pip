@@ -1,5 +1,6 @@
 requests >= 2.4.2
 
 # Optional dependency for pulling login credentials from the system keyring.
-# Script will run fine without it.
-keyring
+# Script will run fine without it, commented out so only folks who want it
+# actually install it.
+# keyring
