@@ -27,8 +27,10 @@ import time
 
 try:
     import keyring
-except ImportError:
-    # keyring isn't available, so mock the interface to simulate no pw
+    assert keyring.get_keyring().priority
+except (ImportError, AssertionError):
+    # no suitable keyring is available, so mock the interface
+    # to simulate no pw
     class keyring:
         get_password = staticmethod(lambda system, username: None)
 
