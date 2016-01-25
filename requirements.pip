@@ -1,4 +1,4 @@
-requests
+requests >= 2.4.2
 
 # Optional dependency for pulling login credentials from the system keyring.
 # Script will run fine without it.
