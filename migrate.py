@@ -303,11 +303,30 @@ def format_user(user):
     # 'reported_by' key, so just be sure to pass in None
     if user is None:
         return "Anonymous"
-    return (
-        user['display_name'] + " (Bitbucket: [{0}](http://bitbucket.org/{0}), "
-        "GitHub: [{0}](http://github.com/{0}))"
-        .format(user['username'])
-    )
+    bb_user = "Bitbucket: [{0}](http://bitbucket.org/{0})".format(user['username'])
+    # Verify GH user link doesn't 404. Unfortunately can't use
+    # https://github.com/<name> because it might be an organization
+    gh_user_url = ('https://api.github.com/users/' + user['username'])
+    respo = requests.head(gh_user_url) # TODO add auth to increase rate limit
+    if respo.status_code == 200:
+        gh_user = "GitHub: [{0}](http://github.com/{0})".format(user['username'])
+    elif respo.status_code == 404:
+        gh_user = "GitHub: Unknown"
+    elif respo.status_code == 403:
+        raise RuntimeError(
+            "GitHub is currently returning a 403 Forbidden when trying to "
+            "access: {}. This is likely due to rate limiting. "
+            "You can read more about GitHub's API rate limiting policies here: "
+            "https://developer.github.com/v3/#rate-limiting"
+            .format(gh_user_url)
+        )
+    else:
+        raise RuntimeError(
+            "Failed to check GitHub User url: {} due to "
+            "unexpected HTTP status code: {}"
+            .format(gh_user_url, respo.status_code)
+        )
+    return (user['display_name'] + " (" + bb_user + ", " + gh_user + ")")
 
 
 def convert_date(bb_date):
