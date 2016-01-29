@@ -100,25 +100,64 @@ def main(options):
     """
     bb_url = "https://api.bitbucket.org/1.0/repositories/{repo}/issues".format(
         repo=options.bitbucket_repo)
+    options.bb_auth = None
+    bb_repo_status = requests.head(bb_url).status_code
+    if bb_repo_status == 403:  # Only ask for BB pass on private BB repos
+        kr_pass_bb = keyring.get_password('Bitbucket', options.bitbucket_username)
+        bitbucket_password = kr_pass_bb or getpass.getpass(
+            "Please enter your Bitbucket password.\n"
+            "Note: If your Bitbucket account has two-factor authentication "
+            "enabled, you must temporarily disable it until "
+            "https://bitbucket.org/site/master/issues/11774/ is resolved.\n"
+        )
+        options.bb_auth = (options.bitbucket_username, bitbucket_password)
+        # Verify BB creds work
+        if requests.head(bb_url, auth=options.bb_auth).status_code == 401:
+            raise RuntimeError("Failed to login to Bitbucket.")
+        if requests.head(bb_url, auth=options.bb_auth).status_code == 403:
+            raise RuntimeError(
+                "Bitbucket login succeeded, but user '{}' doesn't have "
+                "permission to access the url: {}"
+                .format(options.bitbucket_username, bb_url)
+            )
+    elif bb_repo_status == 404:
+        raise RuntimeError(
+        "Could not find a Bitbucket Issue Tracker at: {}\n"
+        "Hint: the Bitbucket repository name is case-sensitive."
+        .format(bb_url)
+        )
 
-    # resolve password upfront so the user isn't prompted later
-    kr_pass_bb = keyring.get_password('Bitbucket', options.bitbucket_username)
-    bitbucket_password = kr_pass_bb or getpass.getpass(
-        "Please enter your Bitbucket password.\n"
-    )
-    kr_pass = keyring.get_password('Github', options.github_username)
-    github_password = kr_pass or getpass.getpass(
+    # Always need the GH pass so format_user() can verify links to GitHub user
+    # profiles don't 404. Auth'ing necessary to get higher GH rate limits.
+    kr_pass_gh = keyring.get_password('Github', options.github_username)
+    github_password = kr_pass_gh or getpass.getpass(
         "Please enter your GitHub password.\n"
-        "Note: If your account has two-factor authentication enabled, you must "
-        "use a personal access token from https://github.com/settings/tokens "
-        "in place of a password for this script.\n"
+        "Note: If your GitHub account has authentication enabled, "
+        "you must use a personal access token from "
+        "https://github.com/settings/tokens in place of a password for this "
+        "script.\n"
     )
-    bb_auth = (options.bitbucket_username, bitbucket_password)
-    gh_auth = (options.github_username, github_password)
-    issues = get_issues(bb_url, options.start, bb_auth)
+    options.gh_auth = (options.github_username, github_password)
+    # Verify GH creds work
+    gh_test_url = 'https://api.github.com/repos/' + options.github_repo
+    gh_repo_status = requests.head(gh_test_url, auth=options.gh_auth).status_code
+    if gh_repo_status == 401:
+        raise RuntimeError("Failed to login to GitHub.")
+    elif gh_repo_status == 403:
+        raise RuntimeError(
+            "GitHub login succeeded, but user '{}' either doesn't have "
+            "permission to access the repo at: {}\n"
+            "or is over their GitHub API rate limit.\n"
+            "You can read more about GitHub's API rate limiting policies here: "
+            "https://developer.github.com/v3/#rate-limiting"
+            .format(options.github_username, gh_test_url)
+        )
+    elif gh_repo_status == 404:
+        raise RuntimeError("Could not find a GitHub repo at: " + gh_test_url)
 
+    issues = get_issues(bb_url, options.start, options.bb_auth)
     for index, issue in enumerate(issues):
-        comments = get_issue_comments(issue['local_id'], bb_url, bb_auth)
+        comments = get_issue_comments(issue['local_id'], bb_url, options.bb_auth)
         gh_issue = convert_issue(issue, options)
         gh_comments = [convert_comment(c, options) for c in comments
                                 if convert_comment(c, options) is not None]
@@ -169,20 +208,6 @@ def get_issues(bb_url, start, bb_auth):
             issues += result['issues']
             # 'start' is the current list index of the issue, not the issue ID
             start += len(result['issues'])
-
-        elif respo.status_code == 401:
-            raise RuntimeError(
-                "Failed to login to Bitbucket."
-                "Hint: You must disable two-factor authentication on your "
-                "Bitbucket account until "
-                "https://bitbucket.org/site/master/issues/11774/ is resolved"
-            )
-        elif respo.status_code == 404:
-            raise RuntimeError(
-                "Could not find the Bitbucket repository: {}\n"
-                "Hint: the Bitbucket repository name is case-sensitive."
-                .format(bb_url)
-            )
         else:
             raise RuntimeError(
                 "Bitbucket returned an unexpected HTTP status code: {}"
@@ -268,7 +293,7 @@ def format_issue_body(issue, options):
 - Bitbucket: https://bitbucket.org/{repo}/issue/{id}
 """.format(
         # anonymous issues are missing 'reported_by' key
-        reporter=format_user(issue.get('reported_by', None)),
+        reporter=format_user(issue.get('reported_by', None), options.gh_auth),
         sep='-' * 40,
         content=content,
         repo=options.bitbucket_repo,
@@ -286,13 +311,13 @@ def format_comment_body(comment, options):
 
 {content}
 """.format(
-        author=format_user(comment['author_info']),
+        author=format_user(comment['author_info'], options.gh_auth),
         sep='-' * 40,
         content=content
     )
 
 
-def format_user(user):
+def format_user(user, gh_auth):
     """
     Format a Bitbucket user's info into a string containing either 'Anonymous'
     or their name and links to their Bitbucket and GitHub profiles.
@@ -307,15 +332,15 @@ def format_user(user):
     # Verify GH user link doesn't 404. Unfortunately can't use
     # https://github.com/<name> because it might be an organization
     gh_user_url = ('https://api.github.com/users/' + user['username'])
-    respo = requests.head(gh_user_url) # TODO add auth to increase rate limit
-    if respo.status_code == 200:
+    status_code = requests.head(gh_user_url, auth=gh_auth).status_code
+    if status_code == 200:
         gh_user = "GitHub: [{0}](http://github.com/{0})".format(user['username'])
-    elif respo.status_code == 404:
+    elif status_code == 404:
         gh_user = "GitHub: Unknown"
-    elif respo.status_code == 403:
+    elif status_code == 403:
         raise RuntimeError(
-            "GitHub is currently returning a 403 Forbidden when trying to "
-            "access: {}. This is likely due to rate limiting. "
+            "GitHub returned HTTP Status Code 403 Forbidden when accessing: {}."
+            "\nThis may be due to rate limiting.\n"
             "You can read more about GitHub's API rate limiting policies here: "
             "https://developer.github.com/v3/#rate-limiting"
             .format(gh_user_url)
@@ -324,7 +349,7 @@ def format_user(user):
         raise RuntimeError(
             "Failed to check GitHub User url: {} due to "
             "unexpected HTTP status code: {}"
-            .format(gh_user_url, respo.status_code)
+            .format(gh_user_url, status_code)
         )
     return (user['display_name'] + " (" + bb_user + ", " + gh_user + ")")
 
@@ -406,13 +431,6 @@ def push_github_issue(issue, comments, github_repo, auth, headers):
     respo = requests.post(url, json=issue_data, auth=auth, headers=headers)
     if respo.status_code == 202:
         return respo
-    elif respo.status_code == 401:
-        raise RuntimeError(
-            "Failed to login to GitHub. If your account has two-factor "
-            "authentication enabled, you must use a personal access token from "
-            "https://github.com/settings/tokens in place of a password for "
-            "this script.\n"
-        )
     elif respo.status_code == 422:
         raise RuntimeError(
             "Initial import validation failed for issue '{}' due to the "
