@@ -169,7 +169,7 @@ def main(options):
             # GitHub's Import API currently requires a special header
             headers = {'Accept': 'application/vnd.github.golden-comet-preview+json'}
             push_respo = push_github_issue(
-                gh_issue, gh_comments, options.github_repo, gh_auth, headers
+                gh_issue, gh_comments, options.github_repo, options.gh_auth, headers
             )
             # issue POSTed successfully, now verify the import finished before
             # continuing. Otherwise, we risk issue IDs not being sync'd between
@@ -180,7 +180,7 @@ def main(options):
             # https://github.com/jeffwidman/bitbucket-issue-migration/issues/45
             status_url = push_respo.json()['url']
             gh_issue_url = verify_github_issue_import_finished(
-                status_url, gh_auth, headers
+                status_url, options.gh_auth, headers
                 ).json()['issue_url']
             # verify GH & BB issue IDs match
             # if this fails, convert_links() will have incorrect output
