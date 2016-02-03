@@ -196,6 +196,7 @@ def get_issues(bb_url, start, bb_auth):
     Fetch the issues from Bitbucket
     """
     issues = []
+    initial_offset = start
 
     while True: # keep fetching additional pages of issues until all processed
         respo = requests.get(
@@ -214,8 +215,9 @@ def get_issues(bb_url, start, bb_auth):
                 "Bitbucket returned an unexpected HTTP status code: {}"
                 .format(respo.status_code)
             )
+
     # BB returns a 'count' param that is the total number of issues
-    assert len(issues) == result['count']
+    assert len(issues) == result['count'] - initial_offset
     return issues
 
 
