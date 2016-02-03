@@ -102,7 +102,13 @@ def main(options):
         repo=options.bitbucket_repo)
     options.bb_auth = None
     bb_repo_status = requests.head(bb_url).status_code
-    if bb_repo_status == 403:  # Only ask for BB pass on private BB repos
+    if bb_repo_status == 404:
+        raise RuntimeError(
+            "Could not find a Bitbucket Issue Tracker at: {}\n"
+            "Hint: the Bitbucket repository name is case-sensitive."
+            .format(bb_url)
+        )
+    elif bb_repo_status == 403:  # Only ask for BB pass on private BB repos
         kr_pass_bb = keyring.get_password('Bitbucket', options.bitbucket_username)
         bitbucket_password = kr_pass_bb or getpass.getpass(
             "Please enter your Bitbucket password.\n"
@@ -112,20 +118,15 @@ def main(options):
         )
         options.bb_auth = (options.bitbucket_username, bitbucket_password)
         # Verify BB creds work
-        if requests.head(bb_url, auth=options.bb_auth).status_code == 401:
+        bb_creds_status = requests.head(bb_url, auth=options.bb_auth).status_code
+        if bb_creds_status == 401:
             raise RuntimeError("Failed to login to Bitbucket.")
-        if requests.head(bb_url, auth=options.bb_auth).status_code == 403:
+        elif bb_creds_status == 403:
             raise RuntimeError(
                 "Bitbucket login succeeded, but user '{}' doesn't have "
                 "permission to access the url: {}"
                 .format(options.bitbucket_username, bb_url)
             )
-    elif bb_repo_status == 404:
-        raise RuntimeError(
-        "Could not find a Bitbucket Issue Tracker at: {}\n"
-        "Hint: the Bitbucket repository name is case-sensitive."
-        .format(bb_url)
-        )
 
     # Always need the GH pass so format_user() can verify links to GitHub user
     # profiles don't 404. Auth'ing necessary to get higher GH rate limits.
@@ -139,8 +140,8 @@ def main(options):
     )
     options.gh_auth = (options.github_username, github_password)
     # Verify GH creds work
-    gh_test_url = 'https://api.github.com/repos/' + options.github_repo
-    gh_repo_status = requests.head(gh_test_url, auth=options.gh_auth).status_code
+    gh_repo_url = 'https://api.github.com/repos/' + options.github_repo
+    gh_repo_status = requests.head(gh_repo_url, auth=options.gh_auth).status_code
     if gh_repo_status == 401:
         raise RuntimeError("Failed to login to GitHub.")
     elif gh_repo_status == 403:
@@ -150,10 +151,10 @@ def main(options):
             "or is over their GitHub API rate limit.\n"
             "You can read more about GitHub's API rate limiting policies here: "
             "https://developer.github.com/v3/#rate-limiting"
-            .format(options.github_username, gh_test_url)
+            .format(options.github_username, gh_repo_url)
         )
     elif gh_repo_status == 404:
-        raise RuntimeError("Could not find a GitHub repo at: " + gh_test_url)
+        raise RuntimeError("Could not find a GitHub repo at: " + gh_repo_url)
 
     issues = get_issues(bb_url, options.start, options.bb_auth)
     for index, issue in enumerate(issues):
