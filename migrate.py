@@ -367,7 +367,7 @@ def convert_date(bb_date):
     raise RuntimeError("Could not parse date: {}".format(bb_date))
 
 
-def convert_changesets(body):
+def convert_changesets(content):
     """
     Remove changeset references like:
 
@@ -376,12 +376,12 @@ def convert_changesets(body):
     Since they point to mercurial changesets and there's no easy way to map them
     to git hashes, better to remove them altogether.
     """
-    lines = body.splitlines()
+    lines = content.splitlines()
     filtered_lines = [l for l in lines if not l.startswith("→ <<cset")]
     return "\n".join(filtered_lines)
 
 
-def convert_creole_braces(body):
+def convert_creole_braces(content):
     """
     Convert Creole code blocks that are wrapped in "{{{" and "}}}" to standard
     Markdown code formatting using "`" for inline code and four-space
@@ -389,7 +389,7 @@ def convert_creole_braces(body):
     """
     lines = []
     in_block = False
-    for line in body.splitlines():
+    for line in content.splitlines():
         if line.startswith("{{{") or line.startswith("}}}"):
             if "{{{" in line:
                 _, _, after = line.partition("{{{")
