@@ -41,17 +41,18 @@ def read_arguments():
     )
 
     parser.add_argument(
-        "bitbucket_username",
+        "bitbucket_repo",
         help=(
-            "Your Bitbucket username. This is used only for authentication, "
-            "not for the repository location."
+            "Bitbucket repository to pull issues from.\n"
+            "Format: <user or organization name>/<repo name>\n"
+            "Example: jeffwidman/bitbucket-issue-migration"
         )
     )
 
     parser.add_argument(
-        "bitbucket_repo",
+        "github_repo",
         help=(
-            "Bitbucket repository to pull issues from.\n"
+            "GitHub repository to add issues to.\n"
             "Format: <user or organization name>/<repo name>\n"
             "Example: jeffwidman/bitbucket-issue-migration"
         )
@@ -66,17 +67,15 @@ def read_arguments():
     )
 
     parser.add_argument(
-        "github_repo",
+        "-bu", "--bb_user", dest="bitbucket_username",
         help=(
-            "GitHub repository to add issues to.\n"
-            "Format: <user or organization name>/<repo name>\n"
-            "Example: jeffwidman/bitbucket-issue-migration"
+            "Your Bitbucket username. This is only necessary when migrating "
+            "private Bitbucket repositories."
         )
     )
 
     parser.add_argument(
-        "-n", "--dry-run",
-        action="store_true", dest="dry_run", default=False,
+        "-n", "--dry_run", action="store_true", dest="dry_run", default=False,
         help="Perform a dry run and print everything."
     )
 
@@ -108,7 +107,16 @@ def main(options):
             "Hint: the Bitbucket repository name is case-sensitive."
             .format(bb_url)
         )
-    elif bb_repo_status == 403:  # Only ask for BB pass on private BB repos
+    elif bb_repo_status == 403:  # Only need BB auth creds for private BB repos
+        if not options.bitbucket_username:
+            raise RuntimeError(
+            """
+            Trying to access a private Bitbucket repository, but no
+            Bitbucket username was entered. Please rerun the script using
+            the argument `--bb_user <username>` to pass in your Bitbucket
+            username.
+            """
+            )
         kr_pass_bb = keyring.get_password('Bitbucket', options.bitbucket_username)
         bitbucket_password = kr_pass_bb or getpass.getpass(
             "Please enter your Bitbucket password.\n"

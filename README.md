@@ -4,7 +4,7 @@ This is a small script that will migrate Bitbucket issues to a GitHub project.
 
 It will import issues (and close them as needed) and their comments.
 Repositories can be public or private, owned by individuals or organizations.
-Labels are supported.
+Labels and milestones are supported.
 
 ## Before running:
 
@@ -22,32 +22,32 @@ It's probably easiest to install the dependencies using Python 3's built-in
 ## Parameters:
 
     $ python3 migrate.py -h
-
-    usage: migrate.py [-h] [-n] [-f START]
-                      bitbucket_username bitbucket_repo github_username
-                      github_repo
+    usage: migrate.py [-h] [-bu BITBUCKET_USERNAME] [-n] [-f START]
+                      bitbucket_repo github_repo github_username
 
     A tool to migrate issues from Bitbucket to GitHub.
 
     positional arguments:
-      bitbucket_username    Your Bitbucket username. This is used only for
-                            authentication, not for the repository location.
       bitbucket_repo        Bitbucket repository to pull issues from.
-                            Format:
-                            <user or organization name>/<repo name>
-                            Example:
-                            jeffwidman/bitbucket-issue-migration
+                            Format: <user or organization name>/<repo name>
+                            Example: jeffwidman/bitbucket-issue-migration
+
+      github_repo           GitHub repository to add issues to.
+                            Format: <user or organization name>/<repo name>
+                            Example: jeffwidman/bitbucket-issue-migration
+
       github_username       Your GitHub username. This is used only for
                             authentication, not for the repository location.
-      github_repo           GitHub repository to add issues to.
-                            Format:
-                            <user or organization name>/<repo name>
-                            Example:
-                            jeffwidman/bitbucket-issue-migration
 
     optional arguments:
       -h, --help            show this help message and exit
-      -n, --dry-run         Perform a dry run and print everything.
+
+      -bu BITBUCKET_USERNAME, --bb_user BITBUCKET_USERNAME
+                            Your Bitbucket username. This is only necessary when
+                            migrating private Bitbucket repositories.
+
+      -n, --dry_run         Perform a dry run and print everything.
+
       -f START, --start START
                             The list index of the Bitbucket issue from which to
                             start the import. Note: Normally this matches the
@@ -57,13 +57,13 @@ It's probably easiest to install the dependencies using Python 3's built-in
                             will decrease due to the missing issues without a
                             corresponding decrease in the issue ID.
 
-    $ python3 migrate.py <bitbucket_username> <bitbucket_repo> <github_username> <github_repo>
+    $ python3 migrate.py <bitbucket_repo> <github_repo> <github_username>
 
 ## Example:
 
 For example, to export the SQLAlchemy issue tracker to the repo http://github.com/jeffwidman/testing:
 
-    $ python3 migrate.py jeffwidman zzzeek/sqlalchemy jeffwidman jeffwidman/testing
+    $ python3 migrate.py zzzeek/sqlalchemy jeffwidman/testing jeffwidman
 
 ## Additional notes:
 
