@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+# -*- coding: utf-8 -*-
 
 # This file is part of the Bitbucket issue migration script.
 #
@@ -24,6 +24,9 @@ import re
 import requests
 import sys
 import time
+import zipfile
+from _schema import MigrationInfo, Issue, Comment, User
+from axiom.store import Store
 
 try:
     import keyring
@@ -67,75 +70,69 @@ def read_arguments():
     )
 
     parser.add_argument(
-        "-bu", "--bb_user", dest="bitbucket_username",
-        help=(
-            "Your Bitbucket username. This is only necessary when migrating "
-            "private Bitbucket repositories."
-        )
+        "issues_zip",
+        help="A zip file with an issues export from BitBucket."
     )
 
     parser.add_argument(
-        "-n", "--dry_run", action="store_true", dest="dry_run", default=False,
+        "-n", "--dry-run", action="store_true", dest="dry_run", default=False,
         help="Perform a dry run and print everything."
     )
 
     parser.add_argument(
-        "-f", "--start", type=int, dest="start", default=0,
-        help=(
-            "The list index of the Bitbucket issue from which to start the "
-            "import. Note: Normally this matches the issue ID minus one "
-            "(to account for zero-based indexing). However, if issues were "
-            "deleted in the past from the BB repo, the list index of the issue "
-            "will decrease due to the missing issues without a corresponding "
-            "decrease in the issue ID."
-        )
+        "--db", default="migration.axiom",
+        help="Location to store the migration data."
     )
 
     return parser.parse_args()
+
+def load_issues(store, options):
+    with zipfile.ZipFile(options.issues_zip) as issues_zip:
+        signature = issues_zip.read('.signature').decode('ascii')
+        info = store.findUnique(MigrationInfo, default=None)
+        if info is None:
+            MigrationInfo(store=store, signature=signature)
+        else:
+            if signature == info.signature:
+                return
+            else:
+                raise RuntimeError('Unable to resume: signature does not match')
+        with issues_zip.open('db-1.0.json') as db_file:
+            issues = json.load(db_file)
+    for issue in issues[u'issues']:
+        labels = [issue['priority']]
+        for k in ['component', 'kind', 'milestone', 'version']:
+            v = issue.get(k)
+            if v is not None:
+                labels.append(v)
+        Issue(
+            store=store,
+            bitbucket_id=issue[u'id'],
+            title=issue[u'title'],
+            body=issue[u'content'],
+            closed=issue[u'status'] not in (u'open', u'new'),
+            created_at=convert_date(issue[u'created_on']),
+            labels=labels,
+        ).original_issue = issue
+    for n, issue in enumerate(store.query(Issue, sort=Issue.bitbucket_id.asc), 1):
+        issue.github_id = n
+    for issue in store.query(Issue):
+        issue.body = format_issue_body(issue, options, store)
+    for comment in issues[u'comments']:
+        if comment[u'content']:
+            issue = store.findUnique(
+                Issue, Issue.bitbucket_id == comment[u'issue'])
+            Comment(
+                store=store,
+                issue=issue,
+                created_at=convert_date(comment[u'created_on']),
+                body=format_comment_body(comment, options, store),
+            )
 
 def main(options):
     """
     Main entry point for the script.
     """
-    bb_url = "https://api.bitbucket.org/1.0/repositories/{repo}/issues".format(
-        repo=options.bitbucket_repo)
-    options.bb_auth = None
-    bb_repo_status = requests.head(bb_url).status_code
-    if bb_repo_status == 404:
-        raise RuntimeError(
-            "Could not find a Bitbucket Issue Tracker at: {}\n"
-            "Hint: the Bitbucket repository name is case-sensitive."
-            .format(bb_url)
-        )
-    elif bb_repo_status == 403:  # Only need BB auth creds for private BB repos
-        if not options.bitbucket_username:
-            raise RuntimeError(
-            """
-            Trying to access a private Bitbucket repository, but no
-            Bitbucket username was entered. Please rerun the script using
-            the argument `--bb_user <username>` to pass in your Bitbucket
-            username.
-            """
-            )
-        kr_pass_bb = keyring.get_password('Bitbucket', options.bitbucket_username)
-        bitbucket_password = kr_pass_bb or getpass.getpass(
-            "Please enter your Bitbucket password.\n"
-            "Note: If your Bitbucket account has two-factor authentication "
-            "enabled, you must temporarily disable it until "
-            "https://bitbucket.org/site/master/issues/11774/ is resolved.\n"
-        )
-        options.bb_auth = (options.bitbucket_username, bitbucket_password)
-        # Verify BB creds work
-        bb_creds_status = requests.head(bb_url, auth=options.bb_auth).status_code
-        if bb_creds_status == 401:
-            raise RuntimeError("Failed to login to Bitbucket.")
-        elif bb_creds_status == 403:
-            raise RuntimeError(
-                "Bitbucket login succeeded, but user '{}' doesn't have "
-                "permission to access the url: {}"
-                .format(options.bitbucket_username, bb_url)
-            )
-
     # Always need the GH pass so format_user() can verify links to GitHub user
     # profiles don't 404. Auth'ing necessary to get higher GH rate limits.
     kr_pass_gh = keyring.get_password('Github', options.github_username)
@@ -163,6 +160,11 @@ def main(options):
         )
     elif gh_repo_status == 404:
         raise RuntimeError("Could not find a GitHub repo at: " + gh_repo_url)
+
+    store = Store(options.db)
+    store.transact(load_issues, store, options)
+
+    raise RuntimeError('we done')
 
     issues = get_issues(bb_url, options.start, options.bb_auth)
     for index, issue in enumerate(issues):
@@ -199,102 +201,11 @@ def main(options):
         print("Completed {} of {} issues".format(index + 1, len(issues)))
 
 
-def get_issues(bb_url, start, bb_auth):
-    """
-    Fetch the issues from Bitbucket
-    """
-    issues = []
-    initial_offset = start
-
-    while True: # keep fetching additional pages of issues until all processed
-        respo = requests.get(
-                    bb_url, auth=bb_auth,
-                    params={'sort': 'local_id', 'start': start, 'limit': 50})
-        if respo.status_code == 200:
-            result = respo.json()
-            # check to see if there are issues to process, if not break out.
-            if not result['issues']:
-                break
-            issues += result['issues']
-            # 'start' is the current list index of the issue, not the issue ID
-            start += len(result['issues'])
-        else:
-            raise RuntimeError(
-                "Bitbucket returned an unexpected HTTP status code: {}"
-                .format(respo.status_code)
-            )
-
-    # BB returns a 'count' param that is the total number of issues
-    assert len(issues) == result['count'] - initial_offset
-    return issues
-
-
-def get_issue_comments(issue_id, bb_url, bb_auth):
-    """
-    Fetch the comments for the specified Bitbucket issue
-    """
-    url = "{bb_url}/{issue_id}/comments/".format(**locals())
-    # BB API always returns newest comments first, regardless of 'sort' param;
-    # however, comment order doesn't matter because we don't care about
-    # comment IDs and GitHub sorts by creation date when displaying.
-    respo = requests.get(url, auth=bb_auth)
-    if respo.status_code != 200:
-        raise RuntimeError(
-            "Failed to get issue comments from: {} due to unexpected HTTP "
-            "status code: {}"
-            .format(url, respo.status_code)
-        )
-    return respo.json()
-
-
-def convert_issue(issue, options):
-    """
-    Convert an issue schema from Bitbucket to GitHub's Issue Import API
-    """
-    # Bitbucket issues have an 'is_spam' field that Akismet sets true/false.
-    # they still need to be imported so that issue IDs stay sync'd
-
-    labels = [issue['priority']]
-    for k, v in issue['metadata'].items():
-        if k in ['component', 'kind', 'milestone', 'version'] and v is not None:
-            labels.append(v)
-
-    return {
-        'title': issue['title'],
-        'body': format_issue_body(issue, options),
-        'closed': issue['status'] not in ('open', 'new'),
-        'created_at': convert_date(issue['utc_created_on']),
-        'labels': labels,
-        # milestones are supported by both BB and GH APIs. Need to provide a
-        # mapping from milestone titles in BB to milestone IDs in GH. The
-        # milestone ID must already exist in GH or the import will be rejected.
-        # GitHub schema: 'milestone': <integer ID>
-        # Bitbucket schema: issue['metadata']['milestone']: <string Title>
-        ####
-        # GitHub Import API supports assignee, but we can't use it because
-        # our mapping of BB users to GH users isn't 100% accurate
-        # 'assignee': "jonmagic",
-    }
-
-
-def convert_comment(comment, options):
-    """
-    Convert an issue comment from Bitbucket schema to GitHub's Issue Import API
-    schema. Bitbucket status comments (assigned, version, etc. changes) are not
-    imported to minimize noise.
-    """
-    if comment['content']: # BB status comments have no content
-        return {
-            'created_at': convert_date(comment['utc_created_on']),
-            'body': format_comment_body(comment, options),
-        }
-
-
-def format_issue_body(issue, options):
-    content = convert_changesets(issue['content'])
+def format_issue_body(issue, options, store):
+    content = convert_changesets(issue.original_issue[u'content'])
     content = convert_creole_braces(content)
-    content = convert_links(content, options)
-    return """Originally reported by: **{reporter}**
+    content = convert_links(content, options, store)
+    return u"""Originally reported by: **{reporter}**
 
 {sep}
 
@@ -304,31 +215,34 @@ def format_issue_body(issue, options):
 - Bitbucket: https://bitbucket.org/{repo}/issue/{id}
 """.format(
         # anonymous issues are missing 'reported_by' key
-        reporter=format_user(issue.get('reported_by', None), options.gh_auth),
-        sep='-' * 40,
+        reporter=format_user(
+            issue.original_issue.get(u'reporter', None),
+            options.gh_auth,
+            store),
+        sep=u'-' * 40,
         content=content,
         repo=options.bitbucket_repo,
-        id=issue['local_id'],
+        id=issue.bitbucket_id,
     )
 
 
-def format_comment_body(comment, options):
-    content = convert_changesets(comment['content'])
+def format_comment_body(comment, options, store):
+    content = convert_changesets(comment[u'content'])
     content = convert_creole_braces(content)
-    content = convert_links(content, options)
-    return """*Original comment by* **{author}**:
+    content = convert_links(content, options, store)
+    return u"""*Original comment by* **{author}**:
 
 {sep}
 
 {content}
 """.format(
-        author=format_user(comment['author_info'], options.gh_auth),
+        author=format_user(comment[u'user'], options.gh_auth, store),
         sep='-' * 40,
         content=content
     )
 
 
-def format_user(user, gh_auth):
+def format_user(user, gh_auth, store):
     """
     Format a Bitbucket user's info into a string containing either 'Anonymous'
     or their name and links to their Bitbucket and GitHub profiles.
@@ -338,16 +252,19 @@ def format_user(user, gh_auth):
     # anonymous comments have null 'author_info', anonymous issues don't have
     # 'reported_by' key, so just be sure to pass in None
     if user is None:
-        return "Anonymous"
-    bb_user = "Bitbucket: [{0}](http://bitbucket.org/{0})".format(user['username'])
+        return u"Anonymous"
+    u = store.findUnique(User, User.user == user, None)
+    if u is not None:
+        return u.name
+    bb_user = u"Bitbucket: [{0}](http://bitbucket.org/{0})".format(user)
     # Verify GH user link doesn't 404. Unfortunately can't use
     # https://github.com/<name> because it might be an organization
-    gh_user_url = ('https://api.github.com/users/' + user['username'])
+    gh_user_url = (u'https://api.github.com/users/' + user)
     status_code = requests.head(gh_user_url, auth=gh_auth).status_code
     if status_code == 200:
-        gh_user = "GitHub: [{0}](http://github.com/{0})".format(user['username'])
+        gh_user = u"GitHub: [{0}](http://github.com/{0})".format(user)
     elif status_code == 404:
-        gh_user = "GitHub: Unknown"
+        gh_user = u"GitHub: Unknown"
     elif status_code == 403:
         raise RuntimeError(
             "GitHub returned HTTP Status Code 403 Forbidden when accessing: {}."
@@ -362,17 +279,19 @@ def format_user(user, gh_auth):
             "unexpected HTTP status code: {}"
             .format(gh_user_url, status_code)
         )
-    return (user['display_name'] + " (" + bb_user + ", " + gh_user + ")")
+    name = user + u" (" + bb_user + u", " + gh_user + u")"
+    User(store=store, user=user, name=name)
+    return name
 
 
 def convert_date(bb_date):
     """
     Convert the date from Bitbucket format to GitHub format
     """
-    # '2012-11-26 09:59:39+00:00'
-    m = re.search(r'(\d\d\d\d-\d\d-\d\d) (\d\d:\d\d:\d\d)', bb_date)
+    # '2016-02-15T18:09:50.343889+00:00'
+    m = re.search(ur'(\d\d\d\d-\d\d-\d\d)T(\d\d:\d\d:\d\d)', bb_date)
     if m:
-        return '{}T{}Z'.format(m.group(1), m.group(2))
+        return u'{}T{}Z'.format(m.group(1), m.group(2))
 
     raise RuntimeError("Could not parse date: {}".format(bb_date))
 
@@ -387,8 +306,8 @@ def convert_changesets(content):
     to git hashes, better to remove them altogether.
     """
     lines = content.splitlines()
-    filtered_lines = [l for l in lines if not l.startswith("→ <<cset")]
-    return "\n".join(filtered_lines)
+    filtered_lines = [l for l in lines if not l.startswith(u"→ <<cset")]
+    return u"\n".join(filtered_lines)
 
 
 def convert_creole_braces(content):
@@ -400,31 +319,44 @@ def convert_creole_braces(content):
     lines = []
     in_block = False
     for line in content.splitlines():
-        if line.startswith("{{{") or line.startswith("}}}"):
-            if "{{{" in line:
-                _, _, after = line.partition("{{{")
-                lines.append('    ' + after)
+        if line.startswith(u"{{{") or line.startswith(u"}}}"):
+            if u"{{{" in line:
+                _, _, after = line.partition(u"{{{")
+                lines.append(u'    ' + after)
                 in_block = True
-            if "}}}" in line:
-                before, _, _ = line.partition("}}}")
-                lines.append('    ' + before)
+            if u"}}}" in line:
+                before, _, _ = line.partition(u"}}}")
+                lines.append(u'    ' + before)
                 in_block = False
         else:
             if in_block:
-                lines.append("    " + line)
+                lines.append(u"    " + line)
             else:
-                lines.append(line.replace("{{{", "`").replace("}}}", "`"))
-    return "\n".join(lines)
+                lines.append(line.replace(u"{{{", u"`").replace(u"}}}", u"`"))
+    return u"\n".join(lines)
 
 
-def convert_links(content, options):
+def convert_links(content, options, store):
     """
     Convert explicit links found in the body of a comment or issue to use
     relative links ("#<id>").
     """
-    pattern = r'https://bitbucket.org/{repo}/issue/(\d+)'.format(
+    def map_pr(match):
+        return u'pull request [#{bitbucket_id}](https://bitbucket.org/{repo}/pull-requests/{bitbucket_id})'.format(
+            bitbucket_id=match.group(u'bitbucket_id'),
             repo=options.bitbucket_repo)
-    return re.sub(pattern, r'#\1', content)
+    content = re.sub(ur'pull request #(?P<bitbucket_id>\d+)', map_pr, content)
+    def map_id(match):
+        bitbucket_id = int(match.group(u'bitbucket_id'))
+        issue = store.findUnique(
+            Issue, Issue.bitbucket_id == bitbucket_id, None)
+        #print match, bitbucket_id, issue
+        if issue is None:
+            github_id = bitbucket_id
+        else:
+            github_id = issue.github_id
+        return u'#{}'.format(github_id)
+    return re.sub(ur'#(?P<bitbucket_id>\d+)', map_id, content)
 
 
 def push_github_issue(issue, comments, github_repo, auth, headers):
@@ -436,7 +368,7 @@ def push_github_issue(issue, comments, github_repo, auth, headers):
     https://gist.github.com/jonmagic/5282384165e0f86ef105
     https://github.com/nicoddemus/bitbucket_issue_migration/issues/1
     """
-    issue_data = {'issue': issue, 'comments': comments}
+    issue_data = {u'issue': issue, u'comments': comments}
     url = 'https://api.github.com/repos/{repo}/import/issues'.format(
             repo=github_repo)
     respo = requests.post(url, json=issue_data, auth=auth, headers=headers)
@@ -445,12 +377,12 @@ def push_github_issue(issue, comments, github_repo, auth, headers):
     elif respo.status_code == 422:
         raise RuntimeError(
             "Initial import validation failed for issue '{}' due to the "
-            "following errors:\n{}".format(issue['title'], respo.json())
+            "following errors:\n{}".format(issue[u'title'], respo.json())
         )
     else:
         raise RuntimeError(
             "Failed to POST issue: '{}' due to unexpected HTTP status code: {}"
-            .format(issue['title'], respo.status_code)
+            .format(issue[u'title'], respo.status_code)
         )
 
 
@@ -467,12 +399,12 @@ def verify_github_issue_import_finished(status_url, auth, headers):
                 "unexpected HTTP status code: {}"
                 .format(status_url, respo.status_code)
             )
-        status = respo.json()['status']
-        if status != 'pending':
+        status = respo.json()[u'status']
+        if status != u'pending':
             break
         time.sleep(1)
-    if status == 'imported':
-        print("Imported Issue:", respo.json()['issue_url'])
+    if status == u'imported':
+        print("Imported Issue:", respo.json()[u'issue_url'])
     elif status == 'failed':
         raise RuntimeError(
             "Failed to import GitHub issue due to the following errors:\n{}"
