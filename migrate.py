@@ -20,6 +20,8 @@
 import argparse
 import getpass
 import json
+import logging
+import pprint
 import re
 import requests
 import sys
@@ -80,6 +82,11 @@ def read_arguments():
     )
 
     parser.add_argument(
+        "-d", "--debug", action="store_true", dest="debug", default=False,
+        help="Turn on debug logging."
+    )
+
+    parser.add_argument(
         "--db", default="migration.axiom",
         help="Location to store the migration data."
     )
@@ -133,6 +140,8 @@ def main(options):
     """
     Main entry point for the script.
     """
+    if options.debug:
+        logging.basicConfig(level=logging.DEBUG)
     # Always need the GH pass so format_user() can verify links to GitHub user
     # profiles don't 404. Auth'ing necessary to get higher GH rate limits.
     kr_pass_gh = keyring.get_password('Github', options.github_username)
@@ -164,41 +173,21 @@ def main(options):
     store = Store(options.db)
     store.transact(load_issues, store, options)
 
-    raise RuntimeError('we done')
+    for issue in store.query(Issue, Issue.in_progress == True):
+        def tx():
+            exists = check_issue_exists(
+                options.github_repo, issue.github_id, options.gh_auth)
+            issue.in_progress = False
+            issue.migrated = exists
+        store.transact(tx)
 
-    issues = get_issues(bb_url, options.start, options.bb_auth)
-    for index, issue in enumerate(issues):
-        comments = get_issue_comments(issue['local_id'], bb_url, options.bb_auth)
-        gh_issue = convert_issue(issue, options)
-        gh_comments = [convert_comment(c, options) for c in comments
-                                if convert_comment(c, options) is not None]
-
-        if options.dry_run:
-            print("\nIssue: ", gh_issue)
-            print("\nComments: ", gh_comments)
-        else:
-            # GitHub's Import API currently requires a special header
-            headers = {'Accept': 'application/vnd.github.golden-comet-preview+json'}
-            push_respo = push_github_issue(
-                gh_issue, gh_comments, options.github_repo, options.gh_auth, headers
-            )
-            # issue POSTed successfully, now verify the import finished before
-            # continuing. Otherwise, we risk issue IDs not being sync'd between
-            # Bitbucket and GitHub because GitHub processes the data in the
-            # background, so IDs can be out of order if two issues are POSTed
-            # and the latter finishes before the former. For example, if the
-            # former had a bunch more comments to be processed.
-            # https://github.com/jeffwidman/bitbucket-issue-migration/issues/45
-            status_url = push_respo.json()['url']
-            gh_issue_url = verify_github_issue_import_finished(
-                status_url, options.gh_auth, headers
-                ).json()['issue_url']
-            # verify GH & BB issue IDs match
-            # if this fails, convert_links() will have incorrect output
-            # this will fail if the GH repository has pre-existing issues
-            gh_issue_id = int(gh_issue_url.split('/')[-1])
-            assert gh_issue_id == issue['local_id']
-        print("Completed {} of {} issues".format(index + 1, len(issues)))
+    total = store.query(Issue).count()
+    issues = list(store.query(
+        Issue, Issue.migrated == False, sort=Issue.github_id.asc))
+    for issue in issues:
+        issue.in_progress = True
+        store.transact(import_issue, issue)
+        print("Completed {} of {} issues".format(issue.github_id, total))
 
 
 def format_issue_body(issue, options, store):
@@ -359,7 +348,7 @@ def convert_links(content, options, store):
     return re.sub(ur'#(?P<bitbucket_id>\d+)', map_id, content)
 
 
-def push_github_issue(issue, comments, github_repo, auth, headers):
+def push_github_issue(issue_data, github_repo, auth, headers):
     """
     Push a single issue to GitHub.
 
@@ -368,21 +357,21 @@ def push_github_issue(issue, comments, github_repo, auth, headers):
     https://gist.github.com/jonmagic/5282384165e0f86ef105
     https://github.com/nicoddemus/bitbucket_issue_migration/issues/1
     """
-    issue_data = {u'issue': issue, u'comments': comments}
     url = 'https://api.github.com/repos/{repo}/import/issues'.format(
-            repo=github_repo)
+        repo=github_repo)
     respo = requests.post(url, json=issue_data, auth=auth, headers=headers)
     if respo.status_code == 202:
         return respo
     elif respo.status_code == 422:
         raise RuntimeError(
             "Initial import validation failed for issue '{}' due to the "
-            "following errors:\n{}".format(issue[u'title'], respo.json())
+            "following errors:\n{}".format(
+                issue_data[u'issue'][u'title'], respo.json())
         )
     else:
         raise RuntimeError(
             "Failed to POST issue: '{}' due to unexpected HTTP status code: {}"
-            .format(issue[u'title'], respo.status_code)
+            .format(issue_data[u'issue'][u'title'], respo.status_code)
         )
 
 
@@ -417,6 +406,52 @@ def verify_github_issue_import_finished(status_url, auth, headers):
             .format(status)
         )
     return respo
+
+
+def check_issue_exists(github_repo, github_id, auth):
+    """
+    If we were interrupted in the middle of an import, we need to check if the
+    issue exists or not.  Not 100% reliable since it might still be importing
+    if we resume too quickly.
+    """
+    url = 'https://api.github.com/repos/{repo}/issues/{id}'.format(
+        repo=github_repo, id=github_id)
+    res = requests.head(url, auth=auth)
+    if res.status_code == 200:
+        return True
+    elif res.status_code == 404:
+        return False
+    else:
+        raise RuntimeError(
+            "Failed to check existence of GitHub issue, url: {} due to "
+            "unexpected HTTP status code: {}"
+            .format(url, res.status_code)
+        )
+
+
+def import_issue(issue):
+    if options.dry_run:
+        print("\nIssue: ")
+        pprint.pprint(issue.json())
+    else:
+        # GitHub's Import API currently requires a special header
+        headers = {'Accept': 'application/vnd.github.golden-comet-preview+json'}
+        push_respo = push_github_issue(
+            issue.json(), options.github_repo, options.gh_auth, headers
+        )
+        # issue POSTed successfully, now verify the import finished before
+        # continuing. Otherwise, we risk issue IDs not being sync'd between
+        # Bitbucket and GitHub because GitHub processes the data in the
+        # background, so IDs can be out of order if two issues are POSTed
+        # and the latter finishes before the former. For example, if the
+        # former had a bunch more comments to be processed.
+        # https://github.com/jeffwidman/bitbucket-issue-migration/issues/45
+        status_url = push_respo.json()['url']
+        verify_github_issue_import_finished(
+            status_url, options.gh_auth, headers
+        )
+        issue.in_progress = False
+        issue.migrated = True
 
 
 if __name__ == "__main__":
