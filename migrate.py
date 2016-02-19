@@ -36,7 +36,7 @@ except (ImportError, AssertionError):
 
 def read_arguments():
     parser = argparse.ArgumentParser(
-        description = "A tool to migrate issues from Bitbucket to GitHub."
+        description="A tool to migrate issues from Bitbucket to GitHub."
     )
 
     parser.add_argument(
@@ -92,10 +92,9 @@ def read_arguments():
 
     return parser.parse_args()
 
+
 def main(options):
-    """
-    Main entry point for the script.
-    """
+    """Main entry point for the script."""
     bb_url = "https://api.bitbucket.org/1.0/repositories/{repo}/issues".format(
         repo=options.bitbucket_repo)
     options.bb_auth = None
@@ -109,12 +108,12 @@ def main(options):
     elif bb_repo_status == 403:  # Only need BB auth creds for private BB repos
         if not options.bitbucket_username:
             raise RuntimeError(
-            """
-            Trying to access a private Bitbucket repository, but no
-            Bitbucket username was entered. Please rerun the script using
-            the argument `--bb_user <username>` to pass in your Bitbucket
-            username.
-            """
+                """
+                Trying to access a private Bitbucket repository, but no
+                Bitbucket username was entered. Please rerun the script using
+                the argument `--bb_user <username>` to pass in your Bitbucket
+                username.
+                """
             )
         kr_pass_bb = keyring.get_password('Bitbucket', options.bitbucket_username)
         bitbucket_password = kr_pass_bb or getpass.getpass(
@@ -168,7 +167,7 @@ def main(options):
         comments = get_issue_comments(issue['local_id'], bb_url, options.bb_auth)
         gh_issue = convert_issue(issue, options)
         gh_comments = [convert_comment(c, options) for c in comments
-                                if convert_comment(c, options) is not None]
+                       if convert_comment(c, options) is not None]
 
         if options.dry_run:
             print("\nIssue: ", gh_issue)
@@ -188,8 +187,7 @@ def main(options):
             # https://github.com/jeffwidman/bitbucket-issue-migration/issues/45
             status_url = push_respo.json()['url']
             gh_issue_url = verify_github_issue_import_finished(
-                status_url, options.gh_auth, headers
-                ).json()['issue_url']
+                status_url, options.gh_auth, headers).json()['issue_url']
             # verify GH & BB issue IDs match
             # if this fails, convert_links() will have incorrect output
             # this will fail if the GH repository has pre-existing issues
@@ -199,16 +197,15 @@ def main(options):
 
 
 def get_issues(bb_url, start, bb_auth):
-    """
-    Fetch the issues from Bitbucket
-    """
+    """Fetch the issues from Bitbucket."""
     issues = []
     initial_offset = start
 
-    while True: # keep fetching additional pages of issues until all processed
+    while True:  # keep fetching additional pages of issues until all processed
         respo = requests.get(
-                    bb_url, auth=bb_auth,
-                    params={'sort': 'local_id', 'start': start, 'limit': 50})
+            bb_url, auth=bb_auth,
+            params={'sort': 'local_id', 'start': start, 'limit': 50}
+        )
         if respo.status_code == 200:
             result = respo.json()
             # check to see if there are issues to process, if not break out.
@@ -229,9 +226,7 @@ def get_issues(bb_url, start, bb_auth):
 
 
 def get_issue_comments(issue_id, bb_url, bb_auth):
-    """
-    Fetch the comments for the specified Bitbucket issue
-    """
+    """Fetch the comments for the specified Bitbucket issue."""
     url = "{bb_url}/{issue_id}/comments/".format(**locals())
     # BB API always returns newest comments first, regardless of 'sort' param;
     # however, comment order doesn't matter because we don't care about
@@ -279,10 +274,12 @@ def convert_issue(issue, options):
 def convert_comment(comment, options):
     """
     Convert an issue comment from Bitbucket schema to GitHub's Issue Import API
-    schema. Bitbucket status comments (assigned, version, etc. changes) are not
+    schema.
+
+    Bitbucket status comments (assigned, version, etc. changes) are not
     imported to minimize noise.
     """
-    if comment['content']: # BB status comments have no content
+    if comment['content']:  # BB status comments have no content
         return {
             'created_at': convert_date(comment['utc_created_on']),
             'body': format_comment_body(comment, options),
@@ -331,6 +328,7 @@ def format_user(user, gh_auth):
     """
     Format a Bitbucket user's info into a string containing either 'Anonymous'
     or their name and links to their Bitbucket and GitHub profiles.
+
     The GitHub profile link may be incorrect because it assumes they reused
     their Bitbucket username on GitHub.
     """
@@ -365,9 +363,7 @@ def format_user(user, gh_auth):
 
 
 def convert_date(bb_date):
-    """
-    Convert the date from Bitbucket format to GitHub format
-    """
+    """Convert the date from Bitbucket format to GitHub format."""
     # '2012-11-26 09:59:39+00:00'
     m = re.search(r'(\d\d\d\d-\d\d-\d\d) (\d\d:\d\d:\d\d)', bb_date)
     if m:
@@ -392,9 +388,10 @@ def convert_changesets(content):
 
 def convert_creole_braces(content):
     """
-    Convert Creole code blocks that are wrapped in "{{{" and "}}}" to standard
-    Markdown code formatting using "`" for inline code and four-space
-    indentation for code blocks.
+    Convert Creole code blocks to Markdown formatting.
+
+    Convert text wrapped in "{{{" and "}}}" to "`" for inline code and
+    four-space indentation for multi-line code blocks.
     """
     lines = []
     in_block = False
@@ -418,11 +415,11 @@ def convert_creole_braces(content):
 
 def convert_links(content, options):
     """
-    Convert explicit links found in the body of a comment or issue to use
+    Convert absolute links to other issues related to this repository to
     relative links ("#<id>").
     """
     pattern = r'https://bitbucket.org/{repo}/issue/(\d+)'.format(
-            repo=options.bitbucket_repo)
+        repo=options.bitbucket_repo)
     return re.sub(pattern, r'#\1', content)
 
 
@@ -437,7 +434,7 @@ def push_github_issue(issue, comments, github_repo, auth, headers):
     """
     issue_data = {'issue': issue, 'comments': comments}
     url = 'https://api.github.com/repos/{repo}/import/issues'.format(
-            repo=github_repo)
+        repo=github_repo)
     respo = requests.post(url, json=issue_data, auth=auth, headers=headers)
     if respo.status_code == 202:
         return respo
@@ -455,10 +452,12 @@ def push_github_issue(issue, comments, github_repo, auth, headers):
 
 def verify_github_issue_import_finished(status_url, auth, headers):
     """
-    Checks the status of a GitHub issue import. If the status is 'pending',
-    it sleeps, then rechecks until the status is either 'imported' or 'failed'.
+    Check the status of a GitHub issue import.
+
+    If the status is 'pending', it sleeps, then rechecks until the status is
+    either 'imported' or 'failed'.
     """
-    while True: # keep checking until status is something other than 'pending'
+    while True:  # keep checking until status is something other than 'pending'
         respo = requests.get(status_url, auth=auth, headers=headers)
         if respo.status_code != 200:
             raise RuntimeError(
