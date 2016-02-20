@@ -17,6 +17,7 @@
 # If not, see <http://www.gnu.org/licenses/>.
 
 
+from __future__ import print_function
 import argparse
 import getpass
 import json
@@ -375,14 +376,21 @@ def push_github_issue(issue_data, github_repo, auth, headers):
         )
 
 
-def verify_github_issue_import_finished(status_url, auth, headers):
+def verify_github_issue_import_finished(status_url, github_repo, github_id, auth, headers):
     """
     Checks the status of a GitHub issue import. If the status is 'pending',
     it sleeps, then rechecks until the status is either 'imported' or 'failed'.
     """
+    expected_url = 'https://api.github.com/repos/{repo}/issues/{id}'.format(
+        repo=github_repo, id=github_id)
     while True: # keep checking until status is something other than 'pending'
         respo = requests.get(status_url, auth=auth, headers=headers)
         if respo.status_code != 200:
+            if respo.status_code == 404:
+                # GitHub sometimes gives us a status url that doesn't work;
+                # we'll do our own polling to recover.
+                status = u'fallback'
+                break
             raise RuntimeError(
                 "Failed to check GitHub issue import status url: {} due to "
                 "unexpected HTTP status code: {}"
@@ -393,8 +401,18 @@ def verify_github_issue_import_finished(status_url, auth, headers):
             break
         time.sleep(1)
     if status == u'imported':
+        imported_url = respo.json()[u'issue_url']
+        if imported_url != expected_url:
+            raise RuntimeError(
+                "Consistency failure importing issue:\n"
+                "Expected URL: {}\n"
+                "Imported URL: {}".format(expected_url, imported_url))
         print("Imported Issue:", respo.json()[u'issue_url'])
-    elif status == 'failed':
+    elif status == u'fallback':
+        while not check_issue_exists(github_repo, github_id, auth):
+            time.sleep(1)
+        print("Probably imported issue:", expected_url)
+    elif status == u'failed':
         raise RuntimeError(
             "Failed to import GitHub issue due to the following errors:\n{}"
             .format(respo.json())
@@ -448,7 +466,7 @@ def import_issue(issue):
         # https://github.com/jeffwidman/bitbucket-issue-migration/issues/45
         status_url = push_respo.json()['url']
         verify_github_issue_import_finished(
-            status_url, options.gh_auth, headers
+            status_url, options.github_repo, issue.github_id, options.gh_auth, headers
         )
         issue.in_progress = False
         issue.migrated = True
