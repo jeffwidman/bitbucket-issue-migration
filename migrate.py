@@ -90,6 +90,13 @@ def read_arguments():
         )
     )
 
+    parser.add_argument(
+        "-c", "--count", type=int, dest="count", default=10000,
+        help=(
+            "Number of issues to import"
+        )
+    )
+
     return parser.parse_args()
 
 
@@ -162,7 +169,7 @@ def main(options):
     elif gh_repo_status == 404:
         raise RuntimeError("Could not find a GitHub repo at: " + gh_repo_url)
 
-    issues = get_issues(bb_url, options.start, options.bb_auth)
+    issues = get_issues(bb_url, options.start, options.count, options.bb_auth)
     for index, issue in enumerate(issues):
         comments = get_issue_comments(issue['local_id'], bb_url, options.bb_auth)
         gh_issue = convert_issue(issue, options)
@@ -196,12 +203,12 @@ def main(options):
         print("Completed {} of {} issues".format(index + 1, len(issues)))
 
 
-def get_issues(bb_url, start, bb_auth):
+def get_issues(bb_url, start, count, bb_auth):
     """Fetch the issues from Bitbucket."""
     issues = []
     initial_offset = start
 
-    while True:  # keep fetching additional pages of issues until all processed
+    while len(issues) < count:  # keep fetching additional pages of issues until all processed or got the requested number of issues
         respo = requests.get(
             bb_url, auth=bb_auth,
             params={'sort': 'local_id', 'start': start, 'limit': 50}
@@ -221,8 +228,7 @@ def get_issues(bb_url, start, bb_auth):
             )
 
     # BB returns a 'count' param that is the total number of issues
-    assert len(issues) == result['count'] - initial_offset
-    return issues
+    return issues[0:count]
 
 
 def get_issue_comments(issue_id, bb_url, bb_auth):
