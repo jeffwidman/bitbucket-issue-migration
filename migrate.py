@@ -163,8 +163,12 @@ def main(options):
         raise RuntimeError("Could not find a GitHub repo at: " + gh_repo_url)
 
     issues = get_issues(bb_url, options.start, options.bb_auth)
+    fill_gaps(issues, options.start)
     for index, issue in enumerate(issues):
-        comments = get_issue_comments(issue['local_id'], bb_url, options.bb_auth)
+        if isinstance(issue, DummyIssue):
+            comments = []
+        else:
+            comments = get_issue_comments(issue['local_id'], bb_url, options.bb_auth)
         gh_issue = convert_issue(issue, options)
         gh_comments = [convert_comment(c, options) for c in comments
                        if convert_comment(c, options) is not None]
@@ -281,6 +285,12 @@ def convert_issue(issue, options):
     # Bitbucket issues have an 'is_spam' field that Akismet sets true/false.
     # they still need to be imported so that issue IDs stay sync'd
 
+    if isinstance(issue, DummyIssue):
+        return dict(
+            title="dummy issue",
+            body="filler issue created by bitbucket_issue_migration",
+            closed=True,
+        )
     labels = [issue['priority']]
     for k, v in issue['metadata'].items():
         if k in ['component', 'kind', 'milestone', 'version'] and v is not None:
