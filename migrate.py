@@ -188,9 +188,12 @@ def main(options):
             status_url = push_respo.json()['url']
             gh_issue_url = verify_github_issue_import_finished(
                 status_url, options.gh_auth, headers).json()['issue_url']
-            # verify GH & BB issue IDs match
-            # if this fails, convert_links() will have incorrect output
-            # this will fail if the GH repository has pre-existing issues
+
+            # Verify GH & BB issue IDs match.
+            # If this assertion fails, convert_links() will have incorrect
+            # output.  This condition occurs when:
+            # - the GH repository has pre-existing issues.
+            # - the Bitbucket repository has gaps in the numbering.
             gh_issue_id = int(gh_issue_url.split('/')[-1])
             assert gh_issue_id == issue['local_id']
         print("Completed {} of {} issues".format(index + 1, len(issues)))
