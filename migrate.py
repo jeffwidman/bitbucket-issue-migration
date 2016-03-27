@@ -218,10 +218,11 @@ def fill_gaps(issues, offset):
     >>> issues = [
     ...     dict(local_id=2),
     ...     dict(local_id=4),
+    ...     dict(local_id=7),
     ... ]
     >>> fill_gaps(issues, 0)
     >>> [issue['local_id'] for issue in issues]
-    [1, 2, 3, 4]
+    [1, 2, 3, 4, 5, 6, 7]
     """
     start = offset + 1
     num = start
