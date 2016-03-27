@@ -199,6 +199,36 @@ def main(options):
         print("Completed {} of {} issues".format(index + 1, len(issues)))
 
 
+class DummyIssue(dict):
+    def __init__(self, num):
+        self.update(
+            local_id=num,
+            #...
+        )
+
+
+def fill_gaps(issues, offset):
+    """
+    Fill gaps in the issues, assuming an initial offset.
+
+    >>> issues = [
+    ...     dict(local_id=2),
+    ...     dict(local_id=4),
+    ... ]
+    >>> fill_gaps(issues, 0)
+    >>> [issue['local_id'] for issue in issues]
+    [1, 2, 3, 4]
+    """
+    start = offset + 1
+    num = start
+    index = num - start
+    while index < len(issues):
+        if issues[index]['local_id'] > num:
+            issues[index:index] = [DummyIssue(num)]
+        num += 1
+        index = num - start
+
+
 def get_issues(bb_url, start, bb_auth):
     """Fetch the issues from Bitbucket."""
     issues = []
