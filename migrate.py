@@ -23,6 +23,7 @@ import re
 import requests
 import sys
 import time
+import pprint
 
 try:
     import keyring
@@ -513,8 +514,9 @@ def verify_github_issue_import_finished(status_url, auth, headers):
     """
     while True:  # keep checking until status is something other than 'pending'
         respo = requests.get(status_url, auth=auth, headers=headers)
-        if respo.status_code == 404:
-            print("404 retrieving status URL", status_url)
+        if respo.status_code in (403, 404):
+            print(respo.status_code, "retrieving status URL", status_url)
+            pprint.pprint(respo.headers)
             return
         if respo.status_code != 200:
             raise RuntimeError(
