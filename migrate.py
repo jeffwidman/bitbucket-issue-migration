@@ -336,13 +336,13 @@ def format_user(user, gh_auth):
     # 'reported_by' key, so just be sure to pass in None
     if user is None:
         return "Anonymous"
-    bb_user = "Bitbucket: [{0}](http://bitbucket.org/{0})".format(user['username'])
+    bb_user = "Bitbucket: [{0}](https://bitbucket.org/{0})".format(user['username'])
     # Verify GH user link doesn't 404. Unfortunately can't use
     # https://github.com/<name> because it might be an organization
     gh_user_url = ('https://api.github.com/users/' + user['username'])
     status_code = requests.head(gh_user_url, auth=gh_auth).status_code
     if status_code == 200:
-        gh_user = "GitHub: [{0}](http://github.com/{0})".format(user['username'])
+        gh_user = "GitHub: [{0}](https://github.com/{0})".format(user['username'])
     elif status_code == 404:
         gh_user = "GitHub: Unknown"
     elif status_code == 403:

@@ -61,7 +61,7 @@ It's probably easiest to install the dependencies using Python 3's built-in
 
 ## Example:
 
-For example, to export the SQLAlchemy issue tracker to the repo http://github.com/jeffwidman/testing:
+For example, to export the SQLAlchemy issue tracker to the repo https://github.com/jeffwidman/testing:
 
     $ python3 migrate.py zzzeek/sqlalchemy jeffwidman/testing jeffwidman
 
