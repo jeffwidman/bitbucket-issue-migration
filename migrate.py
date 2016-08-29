@@ -159,14 +159,19 @@ def main(options):
     elif gh_repo_status == 404:
         raise RuntimeError("Could not find a GitHub repo at: " + gh_repo_url)
 
-    issues = get_issues(bb_url, options.skip, options.bb_auth)
+    # GitHub's Import API currently requires a special header
+    headers = {'Accept': 'application/vnd.github.golden-comet-preview+json'}
+    gh_milestones = GithubMilestones(options.github_repo, options.gh_auth, headers)
+
+    issues = get_issues(bb_url, options.start, options.bb_auth)
     fill_gaps(issues, options.skip)
     for index, issue in enumerate(issues):
         if isinstance(issue, DummyIssue):
             comments = []
         else:
             comments = get_issue_comments(issue['local_id'], bb_url, options.bb_auth)
-        gh_issue = convert_issue(issue, options)
+
+        gh_issue = convert_issue(issue, options, gh_milestones)
         gh_comments = [convert_comment(c, options) for c in comments
                        if convert_comment(c, options) is not None]
 
@@ -174,9 +179,7 @@ def main(options):
             print("\nIssue: ", gh_issue)
             print("\nComments: ", gh_comments)
         else:
-            # GitHub's Import API currently requires a special header
-            headers = {'Accept': 'application/vnd.github.golden-comet-preview+json'}
-            push_respo = push_github_issue(
+            push_github_issue(
                 gh_issue, gh_comments, options.github_repo, options.gh_auth, headers
             )
             # issue POSTed successfully, now verify the import finished before
@@ -286,7 +289,7 @@ def get_issue_comments(issue_id, bb_url, bb_auth):
     return respo.json()
 
 
-def convert_issue(issue, options):
+def convert_issue(issue, options, gh_milestones):
     """
     Convert an issue schema from Bitbucket to GitHub's Issue Import API
     """
@@ -301,25 +304,28 @@ def convert_issue(issue, options):
         )
     labels = [issue['priority']]
     for k, v in issue['metadata'].items():
-        if k in ['component', 'kind', 'milestone', 'version'] and v is not None:
+        if k in ['component', 'kind', 'version'] and v is not None:
             labels.append(v)
 
-    return {
+    out = {
         'title': issue['title'],
         'body': format_issue_body(issue, options),
         'closed': issue['status'] not in ('open', 'new', 'on hold'),
         'created_at': convert_date(issue['utc_created_on']),
         'labels': labels,
-        # milestones are supported by both BB and GH APIs. Need to provide a
-        # mapping from milestone titles in BB to milestone IDs in GH. The
-        # milestone ID must already exist in GH or the import will be rejected.
-        # GitHub schema: 'milestone': <integer ID>
-        # Bitbucket schema: issue['metadata']['milestone']: <string Title>
         ####
         # GitHub Import API supports assignee, but we can't use it because
         # our mapping of BB users to GH users isn't 100% accurate
         # 'assignee': "jonmagic",
     }
+
+    # If there's a milestone for the issue, convert it to a Github
+    # milestone number (creating it if necessary).
+    milestone_title = issue['metadata'].get('milestone')
+    if milestone_title:
+        out['milestone'] = gh_milestones.ensure(milestone_title)
+
+    return out
 
 
 def convert_comment(comment, options):
@@ -472,6 +478,57 @@ def convert_links(content, options):
     pattern = r'https://bitbucket.org/{repo}/issue/(\d+)'.format(
         repo=options.bitbucket_repo)
     return re.sub(pattern, r'#\1', content)
+
+
+class GithubMilestones:
+    """
+    This class handles creation of Github milestones for a given
+    repository.
+
+    When instantiated, it loads any milestones that exist for the
+    respository. Calling ensure() will cause a milestone with
+    a given title to be created if it doesn't already exist. The
+    Github number for the milestone is returned.
+    """
+
+    def __init__(self, repo, auth, headers):
+        self.url = 'https://api.github.com/repos/{repo}/milestones'.format(repo=repo)
+        self.session = requests.Session()
+        self.session.auth = auth
+        self.session.headers.update(headers)
+        self.refresh()
+
+    def refresh(self):
+        self.title_to_number = self.load()
+
+    def load(self):
+        milestones = {}
+        url = self.url + "?state=all"
+        while url:
+            respo = self.session.get(url)
+            if respo.status_code != 200:
+                raise RuntimeError(
+                    "Failed to get milestones due to HTTP status code: {}".format(
+                    respo.status_code))
+            for m in respo.json():
+                milestones[m['title']] = m['number']
+            url = respo.links.get("next")
+        return milestones
+
+    def ensure(self, title):
+        number = self.title_to_number.get(title)
+        if number is None:
+            number = self.create(title)
+            self.title_to_number[title] = number
+        return number
+
+    def create(self, title):
+        respo = self.session.post(self.url, json={"title": title})
+        if respo.status_code != 201:
+            raise RuntimeError(
+                "Failed to get milestones due to HTTP status code: {}".format(
+                respo.status_code))
+        return respo.json()["number"]
 
 
 def push_github_issue(issue, comments, github_repo, auth, headers):
