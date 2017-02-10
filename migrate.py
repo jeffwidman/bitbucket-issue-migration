@@ -163,8 +163,12 @@ def main(options):
         raise RuntimeError("Could not find a GitHub repo at: " + gh_repo_url)
 
     issues = get_issues(bb_url, options.start, options.bb_auth)
+    fill_gaps(issues, options.start)
     for index, issue in enumerate(issues):
-        comments = get_issue_comments(issue['local_id'], bb_url, options.bb_auth)
+        if isinstance(issue, DummyIssue):
+            comments = []
+        else:
+            comments = get_issue_comments(issue['local_id'], bb_url, options.bb_auth)
         gh_issue = convert_issue(issue, options)
         gh_comments = [convert_comment(c, options) for c in comments
                        if convert_comment(c, options) is not None]
@@ -188,12 +192,54 @@ def main(options):
             status_url = push_respo.json()['url']
             gh_issue_url = verify_github_issue_import_finished(
                 status_url, options.gh_auth, headers).json()['issue_url']
-            # verify GH & BB issue IDs match
-            # if this fails, convert_links() will have incorrect output
-            # this will fail if the GH repository has pre-existing issues
+
+            # Verify GH & BB issue IDs match.
+            # If this assertion fails, convert_links() will have incorrect
+            # output.  This condition occurs when:
+            # - the GH repository has pre-existing issues.
+            # - the Bitbucket repository has gaps in the numbering.
             gh_issue_id = int(gh_issue_url.split('/')[-1])
             assert gh_issue_id == issue['local_id']
         print("Completed {} of {} issues".format(index + 1, len(issues)))
+
+
+class DummyIssue(dict):
+    def __init__(self, num):
+        self.update(
+            local_id=num,
+            #...
+        )
+
+
+def fill_gaps(issues, offset):
+    """
+    Fill gaps in the issues, assuming an initial offset.
+
+    >>> issues = [
+    ...     dict(local_id=2),
+    ...     dict(local_id=4),
+    ...     dict(local_id=7),
+    ... ]
+    >>> fill_gaps(issues, 0)
+    >>> [issue['local_id'] for issue in issues]
+    [1, 2, 3, 4, 5, 6, 7]
+
+    >>> issues = [
+    ...     dict(local_id=52),
+    ...     dict(local_id=54),
+    ... ]
+    >>> fill_gaps(issues, 50)
+    >>> [issue['local_id'] for issue in issues]
+    [51, 52, 53, 54]
+    """
+    start = offset + 1
+    num = start
+    index = num - start
+    while index < len(issues):
+        if issues[index]['local_id'] > num:
+            issues[index:index] = [DummyIssue(num)]
+        num += 1
+        index = num - start
 
 
 def get_issues(bb_url, start, bb_auth):
@@ -248,6 +294,12 @@ def convert_issue(issue, options):
     # Bitbucket issues have an 'is_spam' field that Akismet sets true/false.
     # they still need to be imported so that issue IDs stay sync'd
 
+    if isinstance(issue, DummyIssue):
+        return dict(
+            title="dummy issue",
+            body="filler issue created by bitbucket_issue_migration",
+            closed=True,
+        )
     labels = [issue['priority']]
     for k, v in issue['metadata'].items():
         if k in ['component', 'kind', 'milestone', 'version'] and v is not None:
