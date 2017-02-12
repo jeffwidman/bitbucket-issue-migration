@@ -515,6 +515,11 @@ def verify_github_issue_import_finished(status_url, auth, headers):
         respo = requests.get(status_url, auth=auth, headers=headers)
         if respo.status_code == 404:
             print("404 retrieving status URL", status_url)
+            print(
+                "GitHub sometimes inexplicably returns a 404 for the "
+                "check url for a single issue even when the issue "
+                "imports successfully. For details, see #77."
+            )
             return
         if respo.status_code != 200:
             raise RuntimeError(
