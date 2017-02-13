@@ -48,14 +48,9 @@ It's probably easiest to install the dependencies using Python 3's built-in
 
       -n, --dry_run         Perform a dry run and print everything.
 
-      -f START, --start START
-                            The list index of the Bitbucket issue from which to
-                            start the import. Note: Normally this matches the
-                            issue ID minus one (to account for zero-based
-                            indexing). However, if issues were deleted in the
-                            past from the BB repo, the list index of the issue
-                            will decrease due to the missing issues without a
-                            corresponding decrease in the issue ID.
+      -f SKIP, --skip SKIP  The number of Bitbucket issues to skip. Note that if
+                            Bitbucket issues were deleted, they are already
+                            automatically skipped.
 
     $ python3 migrate.py <bitbucket_repo> <github_repo> <github_username>
 

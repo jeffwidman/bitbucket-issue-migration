@@ -79,14 +79,10 @@ def read_arguments():
     )
 
     parser.add_argument(
-        "-f", "--start", type=int, dest="start", default=0,
+        "-f", "--skip", type=int, default=0,
         help=(
-            "The list index of the Bitbucket issue from which to start the "
-            "import. Note: Normally this matches the issue ID minus one "
-            "(to account for zero-based indexing). However, if issues were "
-            "deleted in the past from the BB repo, the list index of the issue "
-            "will decrease due to the missing issues without a corresponding "
-            "decrease in the issue ID."
+            "The number of Bitbucket issues to skip. Note that if Bitbucket "
+            "issues were deleted, they are already automatically skipped."
         )
     )
 
@@ -162,8 +158,8 @@ def main(options):
     elif gh_repo_status == 404:
         raise RuntimeError("Could not find a GitHub repo at: " + gh_repo_url)
 
-    issues = get_issues(bb_url, options.start, options.bb_auth)
-    fill_gaps(issues, options.start)
+    issues = get_issues(bb_url, options.skip, options.bb_auth)
+    fill_gaps(issues, options.skip)
     for index, issue in enumerate(issues):
         if isinstance(issue, DummyIssue):
             comments = []
@@ -242,15 +238,15 @@ def fill_gaps(issues, offset):
         index = num - start
 
 
-def get_issues(bb_url, start, bb_auth):
+def get_issues(bb_url, offset, bb_auth):
     """Fetch the issues from Bitbucket."""
     issues = []
-    initial_offset = start
+    initial_offset = offset
 
     while True:  # keep fetching additional pages of issues until all processed
         respo = requests.get(
             bb_url, auth=bb_auth,
-            params={'sort': 'local_id', 'start': start, 'limit': 50}
+            params={'sort': 'local_id', 'start': offset, 'limit': 50}
         )
         if respo.status_code == 200:
             result = respo.json()
@@ -259,7 +255,7 @@ def get_issues(bb_url, start, bb_auth):
                 break
             issues += result['issues']
             # 'start' is the current list index of the issue, not the issue ID
-            start += len(result['issues'])
+            offset += len(result['issues'])
         else:
             raise RuntimeError(
                 "Bitbucket returned an unexpected HTTP status code: {}"
