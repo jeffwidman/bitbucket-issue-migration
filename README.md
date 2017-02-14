@@ -66,6 +66,10 @@ For example, to export the SQLAlchemy issue tracker to the repo https://github.c
 (bug, task, etc), component (if any, custom to each project), and version (if
 any). If you don't want these, just delete the new GitHub labels post-migration.
 
+* Milestones are transferred. If the milestone doesn't exist in GitHub, it will
+be created. If you don't want this, either edit the code (search for "milestone")
+or delete the milestones in GitHub after the migration.
+
 * The migrated issues and issue comments are annotated with both Bitbucket and
 GitHub links to user who authored the comment/issue. This assumes the user
 reused their Bitbucket username on GitHub.
