@@ -23,6 +23,7 @@ import re
 import requests
 import sys
 import time
+import pprint
 
 try:
     import keyring
@@ -186,16 +187,18 @@ def main(options):
             # former had a bunch more comments to be processed.
             # https://github.com/jeffwidman/bitbucket-issue-migration/issues/45
             status_url = push_respo.json()['url']
-            gh_issue_url = verify_github_issue_import_finished(
-                status_url, options.gh_auth, headers).json()['issue_url']
+            resp = verify_github_issue_import_finished(
+                status_url, options.gh_auth, headers)
 
             # Verify GH & BB issue IDs match.
             # If this assertion fails, convert_links() will have incorrect
             # output.  This condition occurs when:
             # - the GH repository has pre-existing issues.
             # - the Bitbucket repository has gaps in the numbering.
-            gh_issue_id = int(gh_issue_url.split('/')[-1])
-            assert gh_issue_id == issue['local_id']
+            if resp:
+                gh_issue_url = resp.json()['issue_url']
+                gh_issue_id = int(gh_issue_url.split('/')[-1])
+                assert gh_issue_id == issue['local_id']
         print("Completed {} of {} issues".format(index + 1, len(issues)))
 
 
@@ -507,6 +510,15 @@ def verify_github_issue_import_finished(status_url, auth, headers):
     """
     while True:  # keep checking until status is something other than 'pending'
         respo = requests.get(status_url, auth=auth, headers=headers)
+        if respo.status_code in (403, 404):
+            print(respo.status_code, "retrieving status URL", status_url)
+            respo.status_code == 404 and print(
+                "GitHub sometimes inexplicably returns a 404 for the "
+                "check url for a single issue even when the issue "
+                "imports successfully. For details, see #77."
+            )
+            pprint.pprint(respo.headers)
+            return
         if respo.status_code != 200:
             raise RuntimeError(
                 "Failed to check GitHub issue import status url: {} due to "
