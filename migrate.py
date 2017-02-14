@@ -307,7 +307,7 @@ def convert_issue(issue, options):
     return {
         'title': issue['title'],
         'body': format_issue_body(issue, options),
-        'closed': issue['status'] not in ('open', 'new'),
+        'closed': issue['status'] not in ('open', 'new', 'on hold'),
         'created_at': convert_date(issue['utc_created_on']),
         'labels': labels,
         # milestones are supported by both BB and GH APIs. Need to provide a
