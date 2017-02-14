@@ -66,15 +66,6 @@ For example, to export the SQLAlchemy issue tracker to the repo https://github.c
 (bug, task, etc), component (if any, custom to each project), and version (if
 any). If you don't want these, just delete the new GitHub labels post-migration.
 
-* Milestones are currently imported as labels. However, it is possible to
-import them straight across: Bitbucket's API exposes the milestone title via
-`issue['metadata']['milestone']` and GitHub's Issue Import API supports
-attaching a milestone ID at `issue['milestone']`. PRs are gladly accepted that
-implement functionality to programatically retrieve/create GH milestone IDs
-for BB milestone titles. Note that GitHub requires that the milestone already
-exist before attaching it to an issue, otherwise the issue import will be
-rejected.
-
 * The migrated issues and issue comments are annotated with both Bitbucket and
 GitHub links to user who authored the comment/issue. This assumes the user
 reused their Bitbucket username on GitHub.
