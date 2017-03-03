@@ -163,7 +163,7 @@ def main(options):
     headers = {'Accept': 'application/vnd.github.golden-comet-preview+json'}
     gh_milestones = GithubMilestones(options.github_repo, options.gh_auth, headers)
 
-    issues = get_issues(bb_url, options.start, options.bb_auth)
+    issues = get_issues(bb_url, options.skip, options.bb_auth)
     fill_gaps(issues, options.skip)
     for index, issue in enumerate(issues):
         if isinstance(issue, DummyIssue):
@@ -179,7 +179,7 @@ def main(options):
             print("\nIssue: ", gh_issue)
             print("\nComments: ", gh_comments)
         else:
-            push_github_issue(
+            push_respo = push_github_issue(
                 gh_issue, gh_comments, options.github_repo, options.gh_auth, headers
             )
             # issue POSTed successfully, now verify the import finished before
