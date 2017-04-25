@@ -16,14 +16,15 @@
 # along with the Bitbucket issue migration script.
 # If not, see <http://www.gnu.org/licenses/>.
 
-
 import argparse
-import getpass
+import pprint
 import re
-import requests
 import sys
 import time
-import pprint
+
+import getpass
+import requests
+
 
 try:
     import keyring
