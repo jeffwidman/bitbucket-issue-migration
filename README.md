@@ -8,8 +8,8 @@ Labels and milestones are supported.
 
 ## Before running:
 
-Requires Python 3 and the [requests](http://requests.readthedocs.org/) library.
-[keyring](https://pypi.python.org/pypi/keyring) is an optional
+Requires Python 3 and the [`requests`](http://requests.readthedocs.org/) library.
+[`keyring`](https://pypi.python.org/pypi/keyring) is an optional
 dependency if you want to pull login credentials from the system keyring.
 
 It's probably easiest to install the dependencies using Python 3's built-in
