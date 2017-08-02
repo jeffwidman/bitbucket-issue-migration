@@ -95,4 +95,4 @@ imposed by GitHub's
 
 
 Currently maintained by [Jeff Widman](http://www.jeffwidman.com/).
-Originally written and open-sourced by [Vitaly Babiy](http://www.howsthe.com/).
+Originally written and open-sourced by [Vitaly Babiy](https://github.com/vbabiy).
