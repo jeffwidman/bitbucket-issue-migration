@@ -306,7 +306,9 @@ def convert_issue(issue, options, gh_milestones):
     labels = [issue['priority']]
     for k, v in issue['metadata'].items():
         if k in ['component', 'kind', 'version'] and v is not None:
-            labels.append(v)
+            # Commas are permitted in Bitbucket's components & versions, but 
+            # they cannot be in GitHub labels, so they must be removed.
+            labels.append(v.replace(',', ''))
 
     out = {
         'title': issue['title'],
