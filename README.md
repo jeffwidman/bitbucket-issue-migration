@@ -42,11 +42,11 @@ It's probably easiest to install the dependencies using Python 3's built-in
     optional arguments:
       -h, --help            show this help message and exit
 
-      -bu BITBUCKET_USERNAME, --bb_user BITBUCKET_USERNAME
+      -bu BITBUCKET_USERNAME, --bb-user BITBUCKET_USERNAME
                             Your Bitbucket username. This is only necessary when
                             migrating private Bitbucket repositories.
 
-      -n, --dry_run         Perform a dry run and print everything.
+      -n, --dry-run         Perform a dry run and print everything.
 
       -f SKIP, --skip SKIP  The number of Bitbucket issues to skip. Note that if
                             Bitbucket issues were deleted, they are already

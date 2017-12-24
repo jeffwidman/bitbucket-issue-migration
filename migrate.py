@@ -68,7 +68,7 @@ def read_arguments():
     )
 
     parser.add_argument(
-        "-bu", "--bb_user", dest="bitbucket_username",
+        "-bu", "--bb-user", dest="bitbucket_username",
         help=(
             "Your Bitbucket username. This is only necessary when migrating "
             "private Bitbucket repositories."
@@ -76,7 +76,7 @@ def read_arguments():
     )
 
     parser.add_argument(
-        "-n", "--dry_run", action="store_true", dest="dry_run", default=False,
+        "-n", "--dry-run", action="store_true",
         help="Perform a dry run and print everything."
     )
 
@@ -109,7 +109,7 @@ def main(options):
                 """
                 Trying to access a private Bitbucket repository, but no
                 Bitbucket username was entered. Please rerun the script using
-                the argument `--bb_user <username>` to pass in your Bitbucket
+                the argument `--bb-user <username>` to pass in your Bitbucket
                 username.
                 """
             )
