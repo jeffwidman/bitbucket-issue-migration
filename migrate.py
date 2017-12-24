@@ -88,6 +88,14 @@ def read_arguments():
         )
     )
 
+    parser.add_argument(
+        "-m", "--map-user", action="append", dest="_map_users", default=[],
+        help=(
+            "Override user mapping for usernames, for example "
+            "`--map-user fk=fkrull`.  Can be specified multiple times."
+        ),
+    )
+
     return parser.parse_args()
 
 
@@ -96,6 +104,7 @@ def main(options):
     bb_url = "https://api.bitbucket.org/1.0/repositories/{repo}/issues".format(
         repo=options.bitbucket_repo)
     options.bb_auth = None
+    options.users = dict(user.split('=') for user in options._map_users)
     bb_repo_status = requests.head(bb_url).status_code
     if bb_repo_status == 404:
         raise RuntimeError(
@@ -306,7 +315,7 @@ def convert_issue(issue, options, gh_milestones):
     labels = [issue['priority']]
     for k, v in issue['metadata'].items():
         if k in ['component', 'kind', 'version'] and v is not None:
-            # Commas are permitted in Bitbucket's components & versions, but 
+            # Commas are permitted in Bitbucket's components & versions, but
             # they cannot be in GitHub labels, so they must be removed.
             labels.append(v.replace(',', ''))
 
@@ -360,7 +369,7 @@ def format_issue_body(issue, options):
 - Bitbucket: https://bitbucket.org/{repo}/issue/{id}
 """.format(
         # anonymous issues are missing 'reported_by' key
-        reporter=format_user(issue.get('reported_by', None), options.gh_auth),
+        reporter=format_user(issue.get('reported_by', None), options),
         sep='-' * 40,
         content=content,
         repo=options.bitbucket_repo,
@@ -378,33 +387,28 @@ def format_comment_body(comment, options):
 
 {content}
 """.format(
-        author=format_user(comment['author_info'], options.gh_auth),
+        author=format_user(comment['author_info'], options),
         sep='-' * 40,
         content=content
     )
 
 
-def format_user(user, gh_auth):
-    """
-    Format a Bitbucket user's info into a string containing either 'Anonymous'
-    or their name and links to their Bitbucket and GitHub profiles.
+def _gh_username(username, users, gh_auth):
+    try:
+        return users[username]
+    except KeyError:
+        pass
 
-    The GitHub profile link may be incorrect because it assumes they reused
-    their Bitbucket username on GitHub.
-    """
-    # anonymous comments have null 'author_info', anonymous issues don't have
-    # 'reported_by' key, so just be sure to pass in None
-    if user is None:
-        return "Anonymous"
-    bb_user = "Bitbucket: [{0}](https://bitbucket.org/{0})".format(user['username'])
     # Verify GH user link doesn't 404. Unfortunately can't use
     # https://github.com/<name> because it might be an organization
-    gh_user_url = ('https://api.github.com/users/' + user['username'])
+    gh_user_url = 'https://api.github.com/users/' + username
     status_code = requests.head(gh_user_url, auth=gh_auth).status_code
     if status_code == 200:
-        gh_user = "GitHub: [{0}](https://github.com/{0})".format(user['username'])
+        users[username] = username
+        return username
     elif status_code == 404:
-        gh_user = "GitHub: Unknown"
+        users[username] = None
+        return None
     elif status_code == 403:
         raise RuntimeError(
             "GitHub returned HTTP Status Code 403 Forbidden when accessing: {}."
@@ -419,6 +423,26 @@ def format_user(user, gh_auth):
             "unexpected HTTP status code: {}"
             .format(gh_user_url, status_code)
         )
+
+
+def format_user(user, options):
+    """
+    Format a Bitbucket user's info into a string containing either 'Anonymous'
+    or their name and links to their Bitbucket and GitHub profiles.
+
+    The GitHub profile link may be incorrect because it assumes they reused
+    their Bitbucket username on GitHub.
+    """
+    # anonymous comments have null 'author_info', anonymous issues don't have
+    # 'reported_by' key, so just be sure to pass in None
+    if user is None:
+        return "Anonymous"
+    bb_user = "Bitbucket: [{0}](https://bitbucket.org/{0})".format(user['username'])
+    gh_username = _gh_username(user['username'], options.users, options.gh_auth)
+    if gh_username is not None:
+        gh_user = "GitHub: [{0}](https://github.com/{0})".format(gh_username)
+    else:
+        gh_user = "GitHub: Unknown"
     return (user['display_name'] + " (" + bb_user + ", " + gh_user + ")")
 
 

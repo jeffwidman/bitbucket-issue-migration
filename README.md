@@ -22,7 +22,7 @@ It's probably easiest to install the dependencies using Python 3's built-in
 ## Parameters:
 
     $ python3 migrate.py -h
-    usage: migrate.py [-h] [-bu BITBUCKET_USERNAME] [-n] [-f START]
+    usage: migrate.py [-h] [-bu BITBUCKET_USERNAME] [-n] [-f SKIP] [-m _MAP_USERS]
                       bitbucket_repo github_repo github_username
 
     A tool to migrate issues from Bitbucket to GitHub.
@@ -51,6 +51,10 @@ It's probably easiest to install the dependencies using Python 3's built-in
       -f SKIP, --skip SKIP  The number of Bitbucket issues to skip. Note that if
                             Bitbucket issues were deleted, they are already
                             automatically skipped.
+      -m _MAP_USERS, --map-user _MAP_USERS
+                            Override user mapping for usernames, for example
+                            `--map-user fk=fkrull`. Can be specified multiple
+                            times.
 
     $ python3 migrate.py <bitbucket_repo> <github_repo> <github_username>
 
