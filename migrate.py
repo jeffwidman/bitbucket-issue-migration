@@ -359,6 +359,7 @@ def format_issue_body(issue, options):
     content = convert_changesets(issue['content'])
     content = convert_creole_braces(content)
     content = convert_links(content, options)
+    content = convert_users(content, options)
     return """Originally reported by: **{reporter}**
 
 {sep}
@@ -381,6 +382,7 @@ def format_comment_body(comment, options):
     content = convert_changesets(comment['content'])
     content = convert_creole_braces(content)
     content = convert_links(content, options)
+    content = convert_users(content, options)
     return """*Original comment by* **{author}**:
 
 {sep}
@@ -505,6 +507,20 @@ def convert_links(content, options):
     pattern = r'https://bitbucket.org/{repo}/issue/(\d+)'.format(
         repo=options.bitbucket_repo)
     return re.sub(pattern, r'#\1', content)
+
+
+MENTION_RE = re.compile(r'(?:^|(?<=[^\w]))@[a-zA-Z0-9_-]+\b')
+
+
+def convert_users(content, options):
+    """
+    Replace @mentions with users specified on the cli.
+    """
+    def replace_user(match):
+        matched = match.group()[1:]
+        return '@' + options.users.get(matched, matched)
+
+    return MENTION_RE.sub(replace_user, content)
 
 
 class GithubMilestones:
