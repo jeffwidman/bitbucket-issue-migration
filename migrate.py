@@ -173,8 +173,13 @@ def main(options):
             comments = get_issue_comments(issue['local_id'], bb_url, options.bb_auth)
 
         gh_issue = convert_issue(issue, options, gh_milestones)
-        gh_comments = [convert_comment(c, options) for c in comments
-                       if convert_comment(c, options) is not None]
+        gh_comments = [
+            convert_comment(c, options) for c in comments
+            # Bitbucket status comments (assigned, version, etc. changes) are
+            # not imported to minimize noise.
+            # These BB status comments have no content
+            if c['content']
+        ]
 
         if options.dry_run:
             print("\nIssue: ", gh_issue)
@@ -335,15 +340,11 @@ def convert_comment(comment, options):
     """
     Convert an issue comment from Bitbucket schema to GitHub's Issue Import API
     schema.
-
-    Bitbucket status comments (assigned, version, etc. changes) are not
-    imported to minimize noise.
     """
-    if comment['content']:  # BB status comments have no content
-        return {
-            'created_at': convert_date(comment['utc_created_on']),
-            'body': format_comment_body(comment, options),
-        }
+    return {
+        'created_at': convert_date(comment['utc_created_on']),
+        'body': format_comment_body(comment, options),
+    }
 
 
 def format_issue_body(issue, options):
