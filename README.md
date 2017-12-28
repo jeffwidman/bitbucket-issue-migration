@@ -51,6 +51,7 @@ It's probably easiest to install the dependencies using Python 3's built-in
       -f SKIP, --skip SKIP  The number of Bitbucket issues to skip. Note that if
                             Bitbucket issues were deleted, they are already
                             automatically skipped.
+
       -m _MAP_USERS, --map-user _MAP_USERS
                             Override user mapping for usernames, for example
                             `--map-user fk=fkrull`. Can be specified multiple
