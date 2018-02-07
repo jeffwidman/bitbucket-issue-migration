@@ -25,7 +25,6 @@ import time
 import getpass
 import requests
 
-
 try:
     import keyring
     assert keyring.get_keyring().priority
@@ -173,7 +172,10 @@ def main(options):
     headers = {'Accept': 'application/vnd.github.golden-comet-preview+json'}
     gh_milestones = GithubMilestones(options.github_repo, options.gh_auth, headers)
 
+    print("getting issues from bitbucket")
     issues = get_issues(bb_url, options.skip, options.bb_auth)
+    print("done, loaded {} issues".format(len(issues)))
+
     fill_gaps(issues, options.skip)
     for index, issue in enumerate(issues):
         if isinstance(issue, DummyIssue):
@@ -324,17 +326,22 @@ def convert_issue(issue, options, gh_milestones):
             # they cannot be in GitHub labels, so they must be removed.
             labels.append(v.replace(',', ''))
 
+    is_closed = issue['status'] not in ('open', 'new', 'on hold')
     out = {
         'title': issue['title'],
         'body': format_issue_body(issue, options),
-        'closed': issue['status'] not in ('open', 'new', 'on hold'),
+        'closed': is_closed,
         'created_at': convert_date(issue['utc_created_on']),
+        'updated_at': convert_date(issue['utc_last_updated']),
         'labels': labels,
         ####
         # GitHub Import API supports assignee, but we can't use it because
         # our mapping of BB users to GH users isn't 100% accurate
         # 'assignee': "jonmagic",
     }
+
+    if is_closed:
+        out['closed_at'] = convert_date(issue['utc_last_updated'])
 
     # If there's a milestone for the issue, convert it to a Github
     # milestone number (creating it if necessary).
