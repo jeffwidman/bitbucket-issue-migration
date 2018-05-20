@@ -368,7 +368,7 @@ def format_issue_body(issue, options):
     content = convert_creole_braces(content)
     content = convert_links(content, options)
     content = convert_users(content, options)
-    return """Originally reported by: **{reporter}**
+    return """*Originally reported by* **{reporter}**
 
 {sep}
 
@@ -391,7 +391,7 @@ def format_comment_body(comment, options):
     content = convert_creole_braces(content)
     content = convert_links(content, options)
     content = convert_users(content, options)
-    return """*Original comment by* **{author}**:
+    return """*Original comment by* **{author}**
 
 {sep}
 
