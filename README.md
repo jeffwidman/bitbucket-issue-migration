@@ -57,6 +57,12 @@ It's probably easiest to install the dependencies using Python 3's built-in
                             `--map-user fk=fkrull`. Can be specified multiple
                             times.
 
+      --skip-attribution-for BB_SKIP
+                            BitBucket user who doesn't need comments re-
+                            attributed. Useful to skip your own comments, because
+                            you are running this script, and the GitHub comments
+                            will be already under your name.
+
     $ python3 migrate.py <bitbucket_repo> <github_repo> <github_username>
 
 ## Example:
