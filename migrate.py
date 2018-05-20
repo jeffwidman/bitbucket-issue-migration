@@ -526,7 +526,7 @@ def convert_users(content, options):
     """
     def replace_user(match):
         matched = match.group()[1:]
-        return '@' + options.users.get(matched, matched)
+        return '@' + (options.users.get(matched) or matched)
 
     return MENTION_RE.sub(replace_user, content)
 
