@@ -95,6 +95,15 @@ def read_arguments():
         ),
     )
 
+    parser.add_argument(
+        "--skip-attribution-for", dest="bb_skip",
+        help=(
+            "BitBucket user who doesn't need comments re-attributed. Useful "
+            "to skip your own comments, because you are running this script, "
+            "and the GitHub comments will be already under your name."
+        ),
+    )
+
     return parser.parse_args()
 
 
@@ -363,45 +372,68 @@ def convert_comment(comment, options):
     }
 
 
+SEP = "-" * 40
+
+ISSUE_HEADER = """*Originally reported by* **{reporter}**
+
+{sep}
+
+"""
+
+ISSUE_CONTENT = """{content}
+
+{sep}
+- Bitbucket: https://bitbucket.org/{repo}/issue/{id}
+"""
+
+COMMENT_HEADER = """*Original comment by* **{author}**
+
+{sep}
+
+"""
+
+COMMENT_CONTENT = """{content}
+"""
+
 def format_issue_body(issue, options):
     content = convert_changesets(issue['content'])
     content = convert_creole_braces(content)
     content = convert_links(content, options)
     content = convert_users(content, options)
-    return """*Originally reported by* **{reporter}**
-
-{sep}
-
-{content}
-
-{sep}
-- Bitbucket: https://bitbucket.org/{repo}/issue/{id}
-""".format(
+    reporter = issue.get('reported_by')
+    data = dict(
         # anonymous issues are missing 'reported_by' key
-        reporter=format_user(issue.get('reported_by', None), options),
-        sep='-' * 40,
+        reporter=format_user(reporter, options),
+        sep=SEP,
         content=content,
         repo=options.bitbucket_repo,
         id=issue['local_id'],
     )
 
+    if reporter and reporter['username'] == options.bb_skip:
+        header = ""
+    else:
+        header = ISSUE_HEADER.format(**data)
+    content = ISSUE_CONTENT.format(**data)
+    return header + content
 
 def format_comment_body(comment, options):
     content = convert_changesets(comment['content'])
     content = convert_creole_braces(content)
     content = convert_links(content, options)
     content = convert_users(content, options)
-    return """*Original comment by* **{author}**
-
-{sep}
-
-{content}
-""".format(
-        author=format_user(comment['author_info'], options),
+    author = comment['author_info']
+    data = dict(
+        author=format_user(author, options),
         sep='-' * 40,
         content=content
     )
-
+    if author and author['username'] == options.bb_skip:
+        header = ""
+    else:
+        header = COMMENT_HEADER.format(**data)
+    content = COMMENT_CONTENT.format(**data)
+    return header + content
 
 def _gh_username(username, users, gh_auth):
     try:
