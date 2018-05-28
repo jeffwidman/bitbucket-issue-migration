@@ -104,6 +104,11 @@ def read_arguments():
         ),
     )
 
+    parser.add_argument(
+        "--link-changesets", action="store_true",
+        help="Link changeset references back to BitBucket.",
+    )
+
     return parser.parse_args()
 
 
@@ -396,7 +401,8 @@ COMMENT_CONTENT = """{content}
 """
 
 def format_issue_body(issue, options):
-    content = convert_changesets(issue['content'])
+    content = issue['content']
+    content = convert_changesets(content, options)
     content = convert_creole_braces(content)
     content = convert_links(content, options)
     content = convert_users(content, options)
@@ -418,7 +424,8 @@ def format_issue_body(issue, options):
     return header + content
 
 def format_comment_body(comment, options):
-    content = convert_changesets(comment['content'])
+    content = comment['content']
+    content = convert_changesets(content, options)
     content = convert_creole_braces(content)
     content = convert_links(content, options)
     content = convert_users(content, options)
@@ -498,7 +505,7 @@ def convert_date(bb_date):
     raise RuntimeError("Could not parse date: {}".format(bb_date))
 
 
-def convert_changesets(content):
+def convert_changesets(content, options):
     """
     Remove changeset references like:
 
@@ -507,10 +514,21 @@ def convert_changesets(content):
     Since they point to mercurial changesets and there's no easy way to map them
     to git hashes, better to remove them altogether.
     """
-    lines = content.splitlines()
-    filtered_lines = [l for l in lines if not l.startswith("→ <<cset")]
-    return "\n".join(filtered_lines)
-
+    if options.link_changesets:
+        # Look for things that look like sha's. If they are short, they must
+        # have a digit
+        def replace_changeset(match):
+            sha = match.group(1)
+            if len(sha) >= 8 or re.search(r"[0-9]", sha):
+                return ' [{sha} (bb)](https://bitbucket.org/{repo}/commits/{sha})'.format(
+                    repo=options.bitbucket_repo, sha=sha,
+                )
+        content = re.sub(r" ([a-f0-9]{6,40})\b", replace_changeset, content)
+    else:
+        lines = content.splitlines()
+        filtered_lines = [l for l in lines if not l.startswith("→ <<cset")]
+        content = "\n".join(filtered_lines)
+    return content
 
 def convert_creole_braces(content):
     """
