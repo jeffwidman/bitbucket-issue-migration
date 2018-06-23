@@ -46,7 +46,9 @@ It's probably easiest to install the dependencies using Python 3's built-in
                             Your Bitbucket username. This is only necessary when
                             migrating private Bitbucket repositories.
 
-      -n, --dry-run         Perform a dry run and print everything.
+      -n, --dry-run         Simulate issue migration to confirm issues can be
+                            extracted from Bitbucket and converted by this script.
+                            Nothing will be copied to GitHub.
 
       -f SKIP, --skip SKIP  The number of Bitbucket issues to skip. Note that if
                             Bitbucket issues were deleted, they are already

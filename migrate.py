@@ -76,7 +76,11 @@ def read_arguments():
 
     parser.add_argument(
         "-n", "--dry-run", action="store_true",
-        help="Perform a dry run and print everything."
+        help=(
+            "Simulate issue migration to confirm issues can be extracted from "
+            "Bitbucket and converted by this script. Nothing will be copied "
+            "to GitHub."
+        )
     )
 
     parser.add_argument(
