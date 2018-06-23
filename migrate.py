@@ -109,6 +109,11 @@ def read_arguments():
         help="Link changeset references back to BitBucket.",
     )
 
+    parser.add_argument(
+        "--mention-attachments", action="store_true",
+        help="Mention the names of attachments.",
+    )
+
     return parser.parse_args()
 
 
@@ -197,7 +202,12 @@ def main(options):
         else:
             comments = get_issue_comments(issue['local_id'], bb_url, options.bb_auth)
 
-        gh_issue = convert_issue(issue, options, gh_milestones)
+        if options.mention_attachments:
+            attach_names = get_attachment_names(issue['local_id'], bb_url, options.bb_auth)
+        else:
+            attach_names = []
+
+        gh_issue = convert_issue(issue, options, attach_names, gh_milestones)
         gh_comments = [
             convert_comment(c, options) for c in comments
             # Bitbucket status comments (assigned, version, etc. changes) are
@@ -275,6 +285,20 @@ def fill_gaps(issues, offset):
         index = num - start
 
 
+def get_attachment_names(issue_num, bb_url, bb_auth):
+    """Get the names of attachments on this issue."""
+    # Total hack: v1 of the API has no attachment information. Use v2 instead.
+    respo = requests.get(
+        "{}/{}/attachments".format(bb_url.replace("1", "2"), issue_num),
+        auth=bb_auth,
+    )
+    if respo.status_code == 200:
+        result = respo.json()
+        return [val['name'] for val in result['values']]
+    else:
+        return []
+
+
 def get_issues(bb_url, offset, bb_auth):
     """Fetch the issues from Bitbucket."""
     issues = []
@@ -320,7 +344,7 @@ def get_issue_comments(issue_id, bb_url, bb_auth):
     return respo.json()
 
 
-def convert_issue(issue, options, gh_milestones):
+def convert_issue(issue, options, attach_names, gh_milestones):
     """
     Convert an issue schema from Bitbucket to GitHub's Issue Import API
     """
@@ -343,7 +367,7 @@ def convert_issue(issue, options, gh_milestones):
     is_closed = issue['status'] not in ('open', 'new', 'on hold')
     out = {
         'title': issue['title'],
-        'body': format_issue_body(issue, options),
+        'body': format_issue_body(issue, attach_names, options),
         'closed': is_closed,
         'created_at': convert_date(issue['utc_created_on']),
         'updated_at': convert_date(issue['utc_last_updated']),
@@ -385,7 +409,11 @@ ISSUE_HEADER = """*Originally reported by* **{reporter}**
 
 """
 
-ISSUE_CONTENT = """{content}
+ISSUE_ATTACHMENTS = """\
+- This issue had attachments: {attach_names}.  See the [original issue](https://bitbucket.org/{repo}/issue/{id}) for details.
+"""
+
+ISSUE_FOOTER = """
 
 {sep}
 - Bitbucket: https://bitbucket.org/{repo}/issue/{id}
@@ -397,10 +425,8 @@ COMMENT_HEADER = """*Original comment by* **{author}**
 
 """
 
-COMMENT_CONTENT = """{content}
-"""
 
-def format_issue_body(issue, options):
+def format_issue_body(issue, attach_names, options):
     content = issue['content']
     content = convert_changesets(content, options)
     content = convert_creole_braces(content)
@@ -411,17 +437,21 @@ def format_issue_body(issue, options):
         # anonymous issues are missing 'reported_by' key
         reporter=format_user(reporter, options),
         sep=SEP,
-        content=content,
         repo=options.bitbucket_repo,
         id=issue['local_id'],
+        attach_names=", ".join(attach_names),
     )
 
     if reporter and reporter['username'] == options.bb_skip:
         header = ""
     else:
         header = ISSUE_HEADER.format(**data)
-    content = ISSUE_CONTENT.format(**data)
-    return header + content
+    if attach_names:
+        attachments = ISSUE_ATTACHMENTS.format(**data)
+    else:
+        attachments = ""
+    footer = ISSUE_FOOTER.format(**data)
+    return header + content + footer + attachments
 
 def format_comment_body(comment, options):
     content = comment['content']
@@ -433,13 +463,11 @@ def format_comment_body(comment, options):
     data = dict(
         author=format_user(author, options),
         sep='-' * 40,
-        content=content
     )
     if author and author['username'] == options.bb_skip:
         header = ""
     else:
         header = COMMENT_HEADER.format(**data)
-    content = COMMENT_CONTENT.format(**data)
     return header + content
 
 def _gh_username(username, users, gh_auth):
