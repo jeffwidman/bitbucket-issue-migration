@@ -78,6 +78,7 @@ For example, to export the SQLAlchemy issue tracker to the repo https://github.c
 * GitHub labels are created that map to the Bitbucket issue's priority, kind
 (bug, task, etc), component (if any, custom to each project), and version (if
 any). If you don't want these, just delete the new GitHub labels post-migration.
+_(Note: GitHub limits label length to 50 characters. Labels longer than this will be truncated.)_
 
 * Milestones are transferred. If the milestone doesn't exist in GitHub, it will
 be created. If you don't want this, either edit the code (search for "milestone")

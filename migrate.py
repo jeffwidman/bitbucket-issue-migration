@@ -337,7 +337,8 @@ def convert_issue(issue, options, gh_milestones):
         if k in ['component', 'kind', 'version'] and v is not None:
             # Commas are permitted in Bitbucket's components & versions, but
             # they cannot be in GitHub labels, so they must be removed.
-            labels.append(v.replace(',', ''))
+            # Github caps label lengths at 50, so we truncate anything longer
+            labels.append(v.replace(',', '')[:50])
 
     is_closed = issue['status'] not in ('open', 'new', 'on hold')
     out = {
