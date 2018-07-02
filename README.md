@@ -65,6 +65,8 @@ It's probably easiest to install the dependencies using Python 3's built-in
                             you are running this script, and the GitHub comments
                             will be already under your name.
 
+      --link-changesets     Link changeset references back to BitBucket.
+
     $ python3 migrate.py <bitbucket_repo> <github_repo> <github_username>
 
 ## Example:
