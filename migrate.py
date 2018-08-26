@@ -408,26 +408,37 @@ def convert_comment(comment, options):
 
 SEP = "-" * 40
 
-ISSUE_HEADER = """*Originally reported by* **{reporter}**
+ISSUE_TEMPLATE = """\
+**[Original report](https://bitbucket.org/{repo}/issue/{id}) by {reporter}.**
 
-{sep}
+{attachments}{sep}
+
+{content}
+"""
+
+ISSUE_TEMPLATE_SKIP_USER = """\
+**[Original report](https://bitbucket.org/{repo}/issue/{id}) by me.**
+
+{attachments}{sep}
+
+{content}
+"""
+
+ATTACHMENTS_TEMPLATE = """\
+The original report had attachments: {attach_names}
 
 """
 
-ISSUE_ATTACHMENTS = """\
-- This issue had attachments: {attach_names}.  See the [original issue](https://bitbucket.org/{repo}/issue/{id}) for details.
-"""
-
-ISSUE_FOOTER = """
-
-{sep}
-- Bitbucket: https://bitbucket.org/{repo}/issue/{id}
-"""
-
-COMMENT_HEADER = """*Original comment by* **{author}**
+COMMENT_TEMPLATE = """\
+**Original comment by {author}.**
 
 {sep}
 
+{content}
+"""
+
+COMMENT_TEMPLATE_SKIP_USER = """\
+{content}
 """
 
 
@@ -444,19 +455,12 @@ def format_issue_body(issue, attach_names, options):
         sep=SEP,
         repo=options.bitbucket_repo,
         id=issue['local_id'],
-        attach_names=", ".join(attach_names),
+        content=content,
+        attachments=ATTACHMENTS_TEMPLATE.format(attach_names=", ".join(attach_names)) if attach_names else '',
     )
-
-    if reporter and reporter['username'] == options.bb_skip:
-        header = ""
-    else:
-        header = ISSUE_HEADER.format(**data)
-    if attach_names:
-        attachments = ISSUE_ATTACHMENTS.format(**data)
-    else:
-        attachments = ""
-    footer = ISSUE_FOOTER.format(**data)
-    return header + content + footer + attachments
+    skip_user = reporter and reporter['username'] == options.bb_skip
+    template = ISSUE_TEMPLATE_SKIP_USER if skip_user else ISSUE_TEMPLATE
+    return template.format(**data)
 
 def format_comment_body(comment, options):
     content = comment['content']
@@ -468,12 +472,11 @@ def format_comment_body(comment, options):
     data = dict(
         author=format_user(author, options),
         sep='-' * 40,
+        content=content,
     )
-    if author and author['username'] == options.bb_skip:
-        header = ""
-    else:
-        header = COMMENT_HEADER.format(**data)
-    return header + content
+    skip_user = author and author['username'] == options.bb_skip
+    template = COMMENT_TEMPLATE_SKIP_USER if skip_user else COMMENT_TEMPLATE
+    return template.format(**data)
 
 def _gh_username(username, users, gh_auth):
     try:
