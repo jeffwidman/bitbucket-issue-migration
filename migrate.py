@@ -24,6 +24,7 @@ import time
 import warnings
 
 import getpass
+import yaml
 import requests
 
 try:
@@ -124,6 +125,14 @@ def read_arguments():
         help="Mention changes in status as comments.",
     )
 
+    parser.add_argument(
+        "--use-template", type=str,
+        default="templates.yml",
+        help=(
+            "File path of YAML file with formatting templates, "
+            "see templates.yml for example."
+        )
+    )
     return parser.parse_args()
 
 
@@ -197,6 +206,9 @@ def main(options):
     elif gh_repo_status == 404:
         raise RuntimeError("Could not find a GitHub repo at: " + gh_repo_url)
 
+    with open(options.use_template, "r") as file_:
+        templates = yaml.load(file_)
+
     # GitHub's Import API currently requires a special header
     headers = {'Accept': 'application/vnd.github.golden-comet-preview+json'}
     gh_milestones = GithubMilestones(options.github_repo, options.gh_auth, headers)
@@ -222,17 +234,17 @@ def main(options):
         gh_issue = convert_issue(
             issue, comments, changes,
             options, attach_names, gh_milestones,
-
+            templates
         )
         gh_comments = [
-            convert_comment(c, options) for c in comments
+            convert_comment(c, options, templates) for c in comments
             if c['content']['raw'] is not None
         ]
 
         if options.mention_changes:
             gh_comments += [
                 converted_change for converted_change in
-                [convert_change(c, options) for c in changes]
+                [convert_change(c, options, templates) for c in changes]
                 if converted_change
             ]
 
@@ -410,7 +422,8 @@ def get_issue_changes(issue_id, bb_url, bb_auth):
 
 
 def convert_issue(
-        issue, comments, changes, options, attach_names, gh_milestones):
+        issue, comments, changes, options, attach_names, gh_milestones,
+        templates):
     """
     Convert an issue schema from Bitbucket to GitHub's Issue Import API
     """
@@ -438,7 +451,7 @@ def convert_issue(
     is_closed = issue['state'] not in ('open', 'new', 'on hold')
     out = {
         'title': issue['title'],
-        'body': format_issue_body(issue, attach_names, options),
+        'body': format_issue_body(issue, attach_names, options, templates),
         'closed': is_closed,
         'created_at': convert_date(issue['created_on']),
         'updated_at': convert_date(issue['updated_on']),
@@ -473,22 +486,22 @@ def convert_issue(
     return out
 
 
-def convert_comment(comment, options):
+def convert_comment(comment, options, templates):
     """
     Convert an issue comment from Bitbucket schema to GitHub's Issue Import API
     schema.
     """
     return {
         'created_at': convert_date(comment['created_on']),
-        'body': format_comment_body(comment, options),
+        'body': format_comment_body(comment, options, templates),
     }
 
-def convert_change(change, options):
+def convert_change(change, options, templates):
     """
     Convert an issue comment from Bitbucket schema to GitHub's Issue Import API
     schema.
     """
-    body = format_change_body(change, options)
+    body = format_change_body(change, options, templates)
     if not body:
         return None
     return {
@@ -499,49 +512,9 @@ def convert_change(change, options):
 
 SEP = "-" * 40
 
-ISSUE_TEMPLATE = """\
-**[Original report](https://bitbucket.org/{repo}/issue/{id}) by {reporter}.**
-
-{attachments}{sep}
-
-{content}
-"""
-
-ISSUE_TEMPLATE_SKIP_USER = """\
-**[Original report](https://bitbucket.org/{repo}/issue/{id}) by me.**
-
-{attachments}{sep}
-
-{content}
-"""
-
-ATTACHMENTS_TEMPLATE = """\
-The original report had attachments: {attach_names}
-
-"""
-
-COMMENT_TEMPLATE = """\
-**Original comment by {author}.**
-
-{sep}
-
-{content}
-"""
-
-COMMENT_TEMPLATE_SKIP_USER = """\
-{content}
-"""
-
-CHANGE_TEMPLATE = """\
-**Original changes by {author}.**
-
-{sep}
-
-{changes}
-"""
 
 
-def format_issue_body(issue, attach_names, options):
+def format_issue_body(issue, attach_names, options, templates):
     content = issue['content']['raw']
     content = convert_changesets(content, options)
     content = convert_creole_braces(content)
@@ -550,18 +523,19 @@ def format_issue_body(issue, attach_names, options):
     reporter = issue.get('reporter')
     data = dict(
         # anonymous issues are missing 'reported_by' key
-        reporter=format_user(reporter, options),
+        reporter=format_user(reporter, options, templates),
         sep=SEP,
         repo=options.bitbucket_repo,
         id=issue['id'],
         content=content,
-        attachments=ATTACHMENTS_TEMPLATE.format(attach_names=", ".join(attach_names)) if attach_names else '',
+        attachments=templates['attachments_template'].format(attach_names=", ".join(attach_names)) if attach_names else '',
     )
     skip_user = reporter and reporter['username'] == options.bb_skip
-    template = ISSUE_TEMPLATE_SKIP_USER if skip_user else ISSUE_TEMPLATE
+    template = templates['issue_template_skip_user'] \
+    if skip_user else templates['issue_template']
     return template.format(**data)
 
-def format_comment_body(comment, options):
+def format_comment_body(comment, options, templates):
     content = comment['content']['raw']
     content = convert_changesets(content, options)
     content = convert_creole_braces(content)
@@ -569,16 +543,17 @@ def format_comment_body(comment, options):
     content = convert_users(content, options)
     author = comment['user']
     data = dict(
-        author=format_user(author, options),
+        author=format_user(author, options, templates),
         sep='-' * 40,
         content=content,
     )
     skip_user = author and author['username'] == options.bb_skip
-    template = COMMENT_TEMPLATE_SKIP_USER if skip_user else COMMENT_TEMPLATE
+    template = templates['comment_template_skip_user'] if skip_user \
+        else templates['comment_template']
     return template.format(**data)
 
 
-def format_change_body(change, options):
+def format_change_body(change, options, templates):
     author = change['user']
 
     def format_change_element(change_element):
@@ -603,11 +578,11 @@ def format_change_body(change, options):
         return None
 
     data = dict(
-        author=format_user(author, options),
+        author=format_user(author, options, templates),
         sep='-' * 40,
         changes=changes
     )
-    template = CHANGE_TEMPLATE
+    template = templates['change_template']
     return template.format(**data)
 
 
@@ -643,7 +618,7 @@ def _gh_username(username, users, gh_auth):
         )
 
 
-def format_user(user, options):
+def format_user(user, options, templates):
     """
     Format a Bitbucket user's info into a string containing either 'Anonymous'
     or their name and links to their Bitbucket and GitHub profiles.
@@ -655,13 +630,24 @@ def format_user(user, options):
     # 'reported_by' key, so just be sure to pass in None
     if user is None:
         return "Anonymous"
-    bb_user = "Bitbucket: [{0}](https://bitbucket.org/{0})".format(user['username'])
-    gh_username = _gh_username(user['username'], options.users, options.gh_auth)
+    bb_user = templates['bitbucket_username_template'].strip().format(
+        **{"bb_user": user['username']})
+    gh_username = _gh_username(
+        user['username'], options.users, options.gh_auth)
     if gh_username is not None:
-        gh_user = "GitHub: [{0}](https://github.com/{0})".format(gh_username)
+        gh_user = templates['github_username_template'].strip().format(
+            **{"gh_user": gh_username})
     else:
         gh_user = ""
-    return (user['display_name'] + " (" + bb_user + ", " + gh_user + ")")
+
+    data = {
+        "bb_username": user['username'],
+        "gh_username": gh_username or "",
+        "bb_user_badge": bb_user,
+        "gh_user_badge": gh_user,
+        "display_name": user['display_name']
+    }
+    return templates['user_template'].strip().format(**data)
 
 
 def convert_date(bb_date):
