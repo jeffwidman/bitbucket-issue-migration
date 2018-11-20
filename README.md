@@ -108,6 +108,9 @@ repo and start over so that the GitHub issue IDs start from 1.
 imposed by GitHub's
 [Import API](https://gist.github.com/jonmagic/5282384165e0f86ef105).
 
+* the --attachments-wiki option will add attachments to your git repo's
+  wiki.  For this to work, the wiki has to exist, so make sure on the wiki
+  you do "create the first page" and "save" on the "Home.md" at least.
 
 
 Currently maintained by [Jeff Widman](http://www.jeffwidman.com/).

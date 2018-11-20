@@ -17,9 +17,13 @@
 # If not, see <http://www.gnu.org/licenses/>.
 
 import argparse
+import contextlib
+import os
 import pprint
 import re
+import subprocess
 import sys
+import tempfile
 import time
 import warnings
 
@@ -35,6 +39,8 @@ except (ImportError, AssertionError):
     # to simulate no pw
     class keyring:
         get_password = staticmethod(lambda system, username: None)
+
+SEP = "-" * 40
 
 
 def read_arguments():
@@ -118,6 +124,23 @@ def read_arguments():
     parser.add_argument(
         "--mention-attachments", action="store_true",
         help="Mention the names of attachments.",
+    )
+
+    parser.add_argument(
+        "--attachments-wiki", action="store_true",
+        help=(
+            "Download attachments and commit them to a local clone of the "
+            "the project's github wiki repo.   Comments will be added linking "
+            "to this repo. "
+        )
+    )
+
+    parser.add_argument(
+        "--git-ssh-identity", type=str,
+        help=(
+            "When using the --attachments-wiki option, specify a path "
+            "to an alternate identity file."
+        )
     )
 
     parser.add_argument(
@@ -213,6 +236,13 @@ def main(options):
     headers = {'Accept': 'application/vnd.github.golden-comet-preview+json'}
     gh_milestones = GithubMilestones(options.github_repo, options.gh_auth, headers)
 
+    if options.attachments_wiki:
+        if options.mention_attachments:
+            raise TypeError(
+                "Options --mention-attachments and --attachments-wiki are "
+                "mutually exclusive")
+        attachments_repo = AttachmentsRepo(options.github_repo, options)
+
     print("getting issues from bitbucket")
     issues_iterator = get_issues(bb_url, options.skip, options.bb_auth)
 
@@ -226,15 +256,19 @@ def main(options):
             comments = get_issue_comments(issue['id'], bb_url, options.bb_auth)
             changes = get_issue_changes(issue['id'], bb_url, options.bb_auth)
 
-        if options.mention_attachments:
-            attach_names = get_attachment_names(issue['id'], bb_url, options.bb_auth)
+        if options.attachments_wiki:
+            attachment_links = process_wiki_attachments(
+                issue['id'], bb_url, options.bb_auth,
+                options, attachments_repo
+            )
+        elif options.mention_attachments:
+            attachment_links = get_attachment_names(issue['id'], bb_url, options.bb_auth)
         else:
-            attach_names = []
+            attachment_links = []
 
         gh_issue = convert_issue(
             issue, comments, changes,
-            options, attach_names, gh_milestones,
-            templates
+            options, attachment_links, gh_milestones, templates
         )
         gh_comments = [
             convert_comment(c, options, templates) for c in comments
@@ -318,16 +352,62 @@ def fill_gaps(issues_iterator, offset):
         yield issue
 
 
+def process_wiki_attachments(
+        issue_num, bb_url, bb_auth, options, attachments_repo):
+    respo = requests.get(
+        "{}/{}/attachments".format(bb_url, issue_num),
+        auth=bb_auth,
+    )
+    attachment_links = []
+
+    if respo.status_code != 200:
+        raise RuntimeError(
+            "Failed to get issue attachments for issue {} due to "
+            "unexpected HTTP status code: {}"
+            .format(issue_num, respo.status_code)
+        )
+
+    result = respo.json()
+    for val in result['values']:
+        filename = val['name']
+        # this seems to be in val['links']['self']['href'][0] also
+        content_url = "{}/{}/attachments/{}".format(
+            bb_url, issue_num, filename)
+        content = requests.get(content_url, auth=bb_auth)
+        if content.status_code != 200:
+            raise RuntimeError(
+                "Failed to download attachment: {}  due to "
+                "unexpected HTTP status code: {}"
+                .format(content_url, respo.status_code)
+            )
+
+        link = attachments_repo.add_attachment(
+            issue_num, filename, content.content)
+        attachment_links.append(
+            {
+                "name": filename,
+                "link": link
+            }
+        )
+    if result['values']:
+        if not options.dry_run:
+            attachments_repo.commit(issue_num)
+            attachments_repo.push()
+
+    return attachment_links
+
+
 def get_attachment_names(issue_num, bb_url, bb_auth):
     """Get the names of attachments on this issue."""
-    # Total hack: v1 of the API has no attachment information. Use v2 instead.
+
     respo = requests.get(
-        "{}/{}/attachments".format(bb_url.replace("1", "2"), issue_num),
+        "{}/{}/attachments".format(bb_url, issue_num),
         auth=bb_auth,
     )
     if respo.status_code == 200:
         result = respo.json()
-        return [val['name'] for val in result['values']]
+        return [
+            {"name": val['name'], "link": None} for val in result['values']]
     else:
         return []
 
@@ -422,7 +502,7 @@ def get_issue_changes(issue_id, bb_url, bb_auth):
 
 
 def convert_issue(
-        issue, comments, changes, options, attach_names, gh_milestones,
+        issue, comments, changes, options, attachment_links, gh_milestones,
         templates):
     """
     Convert an issue schema from Bitbucket to GitHub's Issue Import API
@@ -451,7 +531,8 @@ def convert_issue(
     is_closed = issue['state'] not in ('open', 'new', 'on hold')
     out = {
         'title': issue['title'],
-        'body': format_issue_body(issue, attach_names, options, templates),
+        'body': format_issue_body(
+            issue, attachment_links, options, templates),
         'closed': is_closed,
         'created_at': convert_date(issue['created_on']),
         'updated_at': convert_date(issue['updated_on']),
@@ -510,17 +591,33 @@ def convert_change(change, options, templates):
     }
 
 
-SEP = "-" * 40
 
 
-
-def format_issue_body(issue, attach_names, options, templates):
+def format_issue_body(issue, attachment_links, options, templates):
     content = issue['content']['raw']
     content = convert_changesets(content, options)
     content = convert_creole_braces(content)
     content = convert_links(content, options)
     content = convert_users(content, options)
     reporter = issue.get('reporter')
+
+    if options.attachments_wiki and attachment_links:
+        attachments = templates['linked_attachments_template'].format(
+            attachment_links=" | ".join(
+                "[{}]({})".format(link['name'], link['link'])
+                for link in attachment_links),
+            sep=SEP
+        )
+    elif options.mention_attachments and attachment_links:
+        attachments = templates['names_only_attachments_template'].format(
+            attachment_names=", ".join(
+                "{}".format(link['name'])
+                for link in attachment_links),
+            sep=SEP
+        )
+    else:
+        attachments = ''
+
     data = dict(
         # anonymous issues are missing 'reported_by' key
         reporter=format_user(reporter, options, templates),
@@ -528,12 +625,13 @@ def format_issue_body(issue, attach_names, options, templates):
         repo=options.bitbucket_repo,
         id=issue['id'],
         content=content,
-        attachments=templates['attachments_template'].format(attach_names=", ".join(attach_names)) if attach_names else '',
+        attachments=attachments
     )
     skip_user = reporter and reporter['username'] == options.bb_skip
     template = templates['issue_template_skip_user'] \
-    if skip_user else templates['issue_template']
+        if skip_user else templates['issue_template']
     return template.format(**data)
+
 
 def format_comment_body(comment, options, templates):
     content = comment['content']['raw']
@@ -544,7 +642,7 @@ def format_comment_body(comment, options, templates):
     author = comment['user']
     data = dict(
         author=format_user(author, options, templates),
-        sep='-' * 40,
+        sep=SEP,
         content=content,
     )
     skip_user = author and author['username'] == options.bb_skip
@@ -579,7 +677,7 @@ def format_change_body(change, options, templates):
 
     data = dict(
         author=format_user(author, options, templates),
-        sep='-' * 40,
+        sep=SEP,
         changes=changes
     )
     template = templates['change_template']
@@ -734,6 +832,60 @@ def convert_users(content, options):
         return '@' + (options.users.get(matched) or matched)
 
     return MENTION_RE.sub(replace_user, content)
+
+
+class AttachmentsRepo:
+    def __init__(self, repo, options):
+
+        self.git_url = "ssh://git@github.com/{}.wiki.git".format(repo)
+        self.dest = tempfile.mkdtemp()
+
+        if options.git_ssh_identity:
+            os.environ['GIT_SSH_COMMAND'] = 'ssh -i {}'.format(
+                options.git_ssh_identity)
+
+        print("Cloning {} into {}...".format(self.git_url, self.dest))
+        with self._chdir_as(self.dest):
+            self._run_cmd("git", "clone", self.git_url, "wiki_checkout")
+            self.repo_path = os.path.join(self.dest, "wiki_checkout")
+            if not os.path.exists(
+                    os.path.join(
+                        self.repo_path, "imported_issue_attachments")):
+                os.makedirs(
+                    os.path.join(self.repo_path, "imported_issue_attachments"))
+
+    def add_attachment(self, issue_num, filename, content):
+        with self._chdir_as(self.repo_path, "imported_issue_attachments"):
+            if not os.path.exists(str(issue_num)):
+                os.makedirs(str(issue_num))
+            path = os.path.join(str(issue_num), filename)
+            with open(path, "wb") as out_:
+                out_.write(content)
+            self._run_cmd("git", "add", path)
+        return "../wiki/imported_issue_attachments/{}/{}".format(
+            issue_num, filename
+        )
+
+    def commit(self, issue_num):
+        with self._chdir_as(self.repo_path):
+            self._run_cmd(
+                "git", "commit", "-m",
+                "Imported attachments for issue {}".format(issue_num))
+
+    def push(self):
+        with self._chdir_as(self.repo_path):
+            self._run_cmd("git", "push")
+
+    @contextlib.contextmanager
+    def _chdir_as(self, *path_tokens):
+        currdir = os.getcwd()
+        path = os.path.join(*path_tokens)
+        os.chdir(path)
+        yield
+        os.chdir(currdir)
+
+    def _run_cmd(self, *args):
+        subprocess.check_call(args)
 
 
 class GithubMilestones:

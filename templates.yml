@@ -21,8 +21,12 @@ issue_template_skip_user: |
 
   {content}
 
-attachments_template: |
-  The original report had attachments: {attach_names}
+names_only_attachments_template: |
+  The original report had attachments: {attachment_names}
+
+
+linked_attachments_template: |
+  Attachments: {attachment_links}
 
 
 comment_template: |
