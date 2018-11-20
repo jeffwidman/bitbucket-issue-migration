@@ -17,12 +17,18 @@
 # If not, see <http://www.gnu.org/licenses/>.
 
 import argparse
+import contextlib
+import os
 import pprint
 import re
+import subprocess
 import sys
+import tempfile
 import time
+import warnings
 
 import getpass
+import yaml
 import requests
 
 try:
@@ -33,6 +39,8 @@ except (ImportError, AssertionError):
     # to simulate no pw
     class keyring:
         get_password = staticmethod(lambda system, username: None)
+
+SEP = "-" * 40
 
 
 def read_arguments():
@@ -118,12 +126,42 @@ def read_arguments():
         help="Mention the names of attachments.",
     )
 
+    parser.add_argument(
+        "--attachments-wiki", action="store_true",
+        help=(
+            "Download attachments and commit them to a local clone of the "
+            "the project's github wiki repo.   Comments will be added linking "
+            "to this repo. "
+        )
+    )
+
+    parser.add_argument(
+        "--git-ssh-identity", type=str,
+        help=(
+            "When using the --attachments-wiki option, specify a path "
+            "to an alternate identity file."
+        )
+    )
+
+    parser.add_argument(
+        "--mention-changes", action="store_true",
+        help="Mention changes in status as comments.",
+    )
+
+    parser.add_argument(
+        "--use-template", type=str,
+        default="templates.yml",
+        help=(
+            "File path of YAML file with formatting templates, "
+            "see templates.yml for example."
+        )
+    )
     return parser.parse_args()
 
 
 def main(options):
     """Main entry point for the script."""
-    bb_url = "https://api.bitbucket.org/1.0/repositories/{repo}/issues".format(
+    bb_url = "https://api.bitbucket.org/2.0/repositories/{repo}/issues".format(
         repo=options.bitbucket_repo)
     options.bb_auth = None
     options.users = dict(user.split('=') for user in options._map_users)
@@ -191,41 +229,66 @@ def main(options):
     elif gh_repo_status == 404:
         raise RuntimeError("Could not find a GitHub repo at: " + gh_repo_url)
 
+    with open(options.use_template, "r") as file_:
+        templates = yaml.load(file_)
+
     # GitHub's Import API currently requires a special header
     headers = {'Accept': 'application/vnd.github.golden-comet-preview+json'}
     gh_milestones = GithubMilestones(options.github_repo, options.gh_auth, headers)
 
-    print("getting issues from bitbucket")
-    issues = get_issues(bb_url, options.skip, options.bb_auth)
-    print("done, loaded {} issues".format(len(issues)))
+    if options.attachments_wiki:
+        if options.mention_attachments:
+            raise TypeError(
+                "Options --mention-attachments and --attachments-wiki are "
+                "mutually exclusive")
+        attachments_repo = AttachmentsRepo(options.github_repo, options)
 
-    fill_gaps(issues, options.skip)
-    for index, issue in enumerate(issues):
+    print("getting issues from bitbucket")
+    issues_iterator = get_issues(bb_url, options.skip, options.bb_auth)
+
+    issues_iterator = fill_gaps(issues_iterator, options.skip)
+
+    for index, issue in enumerate(issues_iterator):
         if isinstance(issue, DummyIssue):
             comments = []
+            changes = []
         else:
-            comments = get_issue_comments(issue['local_id'], bb_url, options.bb_auth)
+            comments = get_issue_comments(issue['id'], bb_url, options.bb_auth)
+            changes = get_issue_changes(issue['id'], bb_url, options.bb_auth)
 
-        if options.mention_attachments:
-            attach_names = get_attachment_names(issue['local_id'], bb_url, options.bb_auth)
+        if options.attachments_wiki:
+            attachment_links = process_wiki_attachments(
+                issue['id'], bb_url, options.bb_auth,
+                options, attachments_repo
+            )
+        elif options.mention_attachments:
+            attachment_links = get_attachment_names(issue['id'], bb_url, options.bb_auth)
         else:
-            attach_names = []
+            attachment_links = []
 
-        gh_issue = convert_issue(issue, options, attach_names, gh_milestones)
+        gh_issue = convert_issue(
+            issue, comments, changes,
+            options, attachment_links, gh_milestones, templates
+        )
         gh_comments = [
-            convert_comment(c, options) for c in comments
-            # Bitbucket status comments (assigned, version, etc. changes) are
-            # not imported to minimize noise.
-            # These BB status comments have no content
-            if c['content']
+            convert_comment(c, options, templates) for c in comments
+            if c['content']['raw'] is not None
         ]
+
+        if options.mention_changes:
+            gh_comments += [
+                converted_change for converted_change in
+                [convert_change(c, options, templates) for c in changes]
+                if converted_change
+            ]
 
         if options.dry_run:
             print("\nIssue: ", gh_issue)
             print("\nComments: ", gh_comments)
         else:
             push_respo = push_github_issue(
-                gh_issue, gh_comments, options.github_repo, options.gh_auth, headers
+                gh_issue, gh_comments, options.github_repo,
+                options.gh_auth, headers
             )
             # issue POSTed successfully, now verify the import finished before
             # continuing. Otherwise, we risk issue IDs not being sync'd between
@@ -246,109 +309,201 @@ def main(options):
             if resp:
                 gh_issue_url = resp.json()['issue_url']
                 gh_issue_id = int(gh_issue_url.split('/')[-1])
-                assert gh_issue_id == issue['local_id']
-        print("Completed {} of {} issues".format(index + 1, len(issues)))
+                assert gh_issue_id == issue['id']
+        print("Completed {} issues".format(index + 1))
 
 
 class DummyIssue(dict):
     def __init__(self, num):
         self.update(
-            local_id=num,
+            id=num,
             #...
         )
 
 
-def fill_gaps(issues, offset):
+def fill_gaps(issues_iterator, offset):
     """
     Fill gaps in the issues, assuming an initial offset.
 
     >>> issues = [
-    ...     dict(local_id=2),
-    ...     dict(local_id=4),
-    ...     dict(local_id=7),
+    ...     dict(id=2),
+    ...     dict(id=4),
+    ...     dict(id=7),
     ... ]
     >>> fill_gaps(issues, 0)
-    >>> [issue['local_id'] for issue in issues]
+    >>> [issue['id'] for issue in issues]
     [1, 2, 3, 4, 5, 6, 7]
 
     >>> issues = [
-    ...     dict(local_id=52),
-    ...     dict(local_id=54),
+    ...     dict(id=52),
+    ...     dict(id=54),
     ... ]
     >>> fill_gaps(issues, 50)
-    >>> [issue['local_id'] for issue in issues]
+    >>> [issue['id'] for issue in issues]
     [51, 52, 53, 54]
     """
-    start = offset + 1
-    num = start
-    index = num - start
-    while index < len(issues):
-        if issues[index]['local_id'] > num:
-            issues[index:index] = [DummyIssue(num)]
-        num += 1
-        index = num - start
+
+    current_id = offset
+    for issue in issues_iterator:
+        issue_id = issue['id']
+        for dummy_id in range(current_id + 1, issue_id):
+            yield DummyIssue(dummy_id)
+        current_id = issue_id
+        yield issue
+
+
+def process_wiki_attachments(
+        issue_num, bb_url, bb_auth, options, attachments_repo):
+    respo = requests.get(
+        "{}/{}/attachments".format(bb_url, issue_num),
+        auth=bb_auth,
+    )
+    attachment_links = []
+
+    if respo.status_code != 200:
+        raise RuntimeError(
+            "Failed to get issue attachments for issue {} due to "
+            "unexpected HTTP status code: {}"
+            .format(issue_num, respo.status_code)
+        )
+
+    result = respo.json()
+    for val in result['values']:
+        filename = val['name']
+        # this seems to be in val['links']['self']['href'][0] also
+        content_url = "{}/{}/attachments/{}".format(
+            bb_url, issue_num, filename)
+        content = requests.get(content_url, auth=bb_auth)
+        if content.status_code != 200:
+            raise RuntimeError(
+                "Failed to download attachment: {}  due to "
+                "unexpected HTTP status code: {}"
+                .format(content_url, respo.status_code)
+            )
+
+        link = attachments_repo.add_attachment(
+            issue_num, filename, content.content)
+        attachment_links.append(
+            {
+                "name": filename,
+                "link": link
+            }
+        )
+    if result['values']:
+        if not options.dry_run:
+            attachments_repo.commit(issue_num)
+            attachments_repo.push()
+
+    return attachment_links
 
 
 def get_attachment_names(issue_num, bb_url, bb_auth):
     """Get the names of attachments on this issue."""
-    # Total hack: v1 of the API has no attachment information. Use v2 instead.
+
     respo = requests.get(
-        "{}/{}/attachments".format(bb_url.replace("1", "2"), issue_num),
+        "{}/{}/attachments".format(bb_url, issue_num),
         auth=bb_auth,
     )
     if respo.status_code == 200:
         result = respo.json()
-        return [val['name'] for val in result['values']]
+        return [
+            {"name": val['name'], "link": None} for val in result['values']]
     else:
         return []
 
 
 def get_issues(bb_url, offset, bb_auth):
     """Fetch the issues from Bitbucket."""
-    issues = []
-    initial_offset = offset
 
-    while True:  # keep fetching additional pages of issues until all processed
+    next_url = bb_url
+
+    params = {"sort": "id"}
+    if offset:
+        params['q'] = "id > {}".format(offset)
+
+    while next_url is not None:  # keep fetching additional pages of issues until all processed
         respo = requests.get(
-            bb_url, auth=bb_auth,
-            params={'sort': 'local_id', 'start': offset, 'limit': 50}
+            next_url, auth=bb_auth,
+            params=params
         )
         if respo.status_code == 200:
             result = respo.json()
             # check to see if there are issues to process, if not break out.
-            if not result['issues']:
+            if result['size'] == 0:
                 break
-            issues += result['issues']
-            # 'start' is the current list index of the issue, not the issue ID
-            offset += len(result['issues'])
+
+            print(
+                "Retrieving issues in batches of {}, total number "
+                "of issues {}, receiving {} to {}".format(
+                    result['pagelen'], result['size'],
+                    (result['page'] - 1) * result['pagelen'] + 1,
+                    result['page'] * result['pagelen'],
+                ))
+            # https://developer.atlassian.com/bitbucket/api/2/reference/meta/pagination
+            next_url = result.get('next', None)
+
+            for issue in result['values']:
+                yield issue
+
         else:
             raise RuntimeError(
                 "Bitbucket returned an unexpected HTTP status code: {}"
                 .format(respo.status_code)
             )
 
-    # BB returns a 'count' param that is the total number of issues
-    assert len(issues) == result['count'] - initial_offset
-    return issues
-
 
 def get_issue_comments(issue_id, bb_url, bb_auth):
     """Fetch the comments for the specified Bitbucket issue."""
-    url = "{bb_url}/{issue_id}/comments/".format(**locals())
-    # BB API always returns newest comments first, regardless of 'sort' param;
-    # however, comment order doesn't matter because we don't care about
-    # comment IDs and GitHub sorts by creation date when displaying.
-    respo = requests.get(url, auth=bb_auth)
-    if respo.status_code != 200:
-        raise RuntimeError(
-            "Failed to get issue comments from: {} due to unexpected HTTP "
-            "status code: {}"
-            .format(url, respo.status_code)
-        )
-    return respo.json()
+    next_url = "{bb_url}/{issue_id}/comments/".format(**locals())
+
+    comments = []
+
+    while next_url is not None:
+        respo = requests.get(next_url, auth=bb_auth, params={"sort": "id"})
+        if respo.status_code != 200:
+            raise RuntimeError(
+                "Failed to get issue comments from: {} due to unexpected HTTP "
+                "status code: {}"
+                .format(next_url, respo.status_code)
+            )
+        rec = respo.json()
+        next_url = rec.get('next')
+        comments.extend(rec['values'])
+    return comments
 
 
-def convert_issue(issue, options, attach_names, gh_milestones):
+def get_issue_changes(issue_id, bb_url, bb_auth):
+    """Fetch the changes for the specified Bitbucket issue."""
+    next_url = "{bb_url}/{issue_id}/changes/".format(**locals())
+
+    changes = []
+
+    while next_url is not None:
+        respo = requests.get(next_url, auth=bb_auth, params={"sort": "id"})
+        # unfortunately, BB's v 2.0 API seems to be 500'ing on some of these
+        # but it does not seem to suggest the whole system isn't working
+        if respo.status_code == 500:
+            warnings.warn(
+                "Failed to get issue changes from {} due to "
+                "semi-expected HTTP status code: {}".format(
+                    next_url, respo.status_code)
+            )
+            return []
+        elif respo.status_code != 200:
+            raise RuntimeError(
+                "Failed to get issue changes from: {} due to unexpected HTTP "
+                "status code: {}"
+                .format(next_url, respo.status_code)
+            )
+        rec = respo.json()
+        next_url = rec.get('next')
+        changes.extend(rec['values'])
+    return changes
+
+
+def convert_issue(
+        issue, comments, changes, options, attachment_links, gh_milestones,
+        templates):
     """
     Convert an issue schema from Bitbucket to GitHub's Issue Import API
     """
@@ -362,20 +517,25 @@ def convert_issue(issue, options, attach_names, gh_milestones):
             closed=True,
         )
     labels = [issue['priority']]
-    for k, v in issue['metadata'].items():
-        if k in ['component', 'kind', 'version'] and v is not None:
+
+    for key in ['component', 'kind', 'version']:
+        v = issue[key]
+        if v is not None:
+            if key == 'component':
+                v = v['name']
             # Commas are permitted in Bitbucket's components & versions, but
             # they cannot be in GitHub labels, so they must be removed.
             # Github caps label lengths at 50, so we truncate anything longer
             labels.append(v.replace(',', '')[:50])
 
-    is_closed = issue['status'] not in ('open', 'new', 'on hold')
+    is_closed = issue['state'] not in ('open', 'new', 'on hold')
     out = {
         'title': issue['title'],
-        'body': format_issue_body(issue, attach_names, options),
+        'body': format_issue_body(
+            issue, attachment_links, options, templates),
         'closed': is_closed,
-        'created_at': convert_date(issue['utc_created_on']),
-        'updated_at': convert_date(issue['utc_last_updated']),
+        'created_at': convert_date(issue['created_on']),
+        'updated_at': convert_date(issue['updated_on']),
         'labels': labels,
         ####
         # GitHub Import API supports assignee, but we can't use it because
@@ -384,99 +544,145 @@ def convert_issue(issue, options, attach_names, gh_milestones):
     }
 
     if is_closed:
-        out['closed_at'] = convert_date(issue['utc_last_updated'])
+        closed_status = [
+            convert_date(change['created_on'])
+            for change in changes
+            if 'state' in change['changes'] and
+            change['changes']['state']['old'] in
+            ('', 'open', 'new', 'on hold') and
+            change['changes']['state']['new'] not in
+            ('', 'open', 'new', 'on hold')
+        ]
+        if closed_status:
+            out['closed_at'] = sorted(closed_status)[-1]
+        else:
+            out['closed_at'] = issue['updated_on']
 
     # If there's a milestone for the issue, convert it to a Github
     # milestone number (creating it if necessary).
-    milestone_title = issue['metadata'].get('milestone')
-    if milestone_title:
-        out['milestone'] = gh_milestones.ensure(milestone_title)
+    milestone = issue['milestone']
+    if milestone and milestone['name']:
+        out['milestone'] = gh_milestones.ensure(milestone['name'])
 
     return out
 
 
-def convert_comment(comment, options):
+def convert_comment(comment, options, templates):
     """
     Convert an issue comment from Bitbucket schema to GitHub's Issue Import API
     schema.
     """
     return {
-        'created_at': convert_date(comment['utc_created_on']),
-        'body': format_comment_body(comment, options),
+        'created_at': convert_date(comment['created_on']),
+        'body': format_comment_body(comment, options, templates),
+    }
+
+def convert_change(change, options, templates):
+    """
+    Convert an issue comment from Bitbucket schema to GitHub's Issue Import API
+    schema.
+    """
+    body = format_change_body(change, options, templates)
+    if not body:
+        return None
+    return {
+        'created_at': convert_date(change['created_on']),
+        'body': body
     }
 
 
-SEP = "-" * 40
-
-ISSUE_TEMPLATE = """\
-**[Original report](https://bitbucket.org/{repo}/issue/{id}) by {reporter}.**
-
-{attachments}{sep}
-
-{content}
-"""
-
-ISSUE_TEMPLATE_SKIP_USER = """\
-**[Original report](https://bitbucket.org/{repo}/issue/{id}) by me.**
-
-{attachments}{sep}
-
-{content}
-"""
-
-ATTACHMENTS_TEMPLATE = """\
-The original report had attachments: {attach_names}
-
-"""
-
-COMMENT_TEMPLATE = """\
-**Original comment by {author}.**
-
-{sep}
-
-{content}
-"""
-
-COMMENT_TEMPLATE_SKIP_USER = """\
-{content}
-"""
 
 
-def format_issue_body(issue, attach_names, options):
-    content = issue['content']
+def format_issue_body(issue, attachment_links, options, templates):
+    content = issue['content']['raw']
     content = convert_changesets(content, options)
     content = convert_creole_braces(content)
     content = convert_links(content, options)
     content = convert_users(content, options)
-    reporter = issue.get('reported_by')
+    reporter = issue.get('reporter')
+
+    if options.attachments_wiki and attachment_links:
+        attachments = templates['linked_attachments_template'].format(
+            attachment_links=" | ".join(
+                "[{}]({})".format(link['name'], link['link'])
+                for link in attachment_links),
+            sep=SEP
+        )
+    elif options.mention_attachments and attachment_links:
+        attachments = templates['names_only_attachments_template'].format(
+            attachment_names=", ".join(
+                "{}".format(link['name'])
+                for link in attachment_links),
+            sep=SEP
+        )
+    else:
+        attachments = ''
+
     data = dict(
         # anonymous issues are missing 'reported_by' key
-        reporter=format_user(reporter, options),
+        reporter=format_user(reporter, options, templates),
         sep=SEP,
         repo=options.bitbucket_repo,
-        id=issue['local_id'],
+        id=issue['id'],
         content=content,
-        attachments=ATTACHMENTS_TEMPLATE.format(attach_names=", ".join(attach_names)) if attach_names else '',
+        attachments=attachments
     )
     skip_user = reporter and reporter['username'] == options.bb_skip
-    template = ISSUE_TEMPLATE_SKIP_USER if skip_user else ISSUE_TEMPLATE
+    template = templates['issue_template_skip_user'] \
+        if skip_user else templates['issue_template']
     return template.format(**data)
 
-def format_comment_body(comment, options):
-    content = comment['content']
+
+def format_comment_body(comment, options, templates):
+    content = comment['content']['raw']
     content = convert_changesets(content, options)
     content = convert_creole_braces(content)
     content = convert_links(content, options)
     content = convert_users(content, options)
-    author = comment['author_info']
+    author = comment['user']
     data = dict(
-        author=format_user(author, options),
-        sep='-' * 40,
+        author=format_user(author, options, templates),
+        sep=SEP,
         content=content,
     )
     skip_user = author and author['username'] == options.bb_skip
-    template = COMMENT_TEMPLATE_SKIP_USER if skip_user else COMMENT_TEMPLATE
+    template = templates['comment_template_skip_user'] if skip_user \
+        else templates['comment_template']
     return template.format(**data)
+
+
+def format_change_body(change, options, templates):
+    author = change['user']
+
+    def format_change_element(change_element):
+        old = change['changes'][change_element]['old']
+        new = change['changes'][change_element]['new']
+        if old and new:
+            return 'changed {} from "{}" to "{}"'.format(change_element, old, new)
+        elif old:
+            return 'removed "{}" {}'.format(old, change_element)
+        elif new:
+            return 'set {} to "{}"'.format(change_element, new)
+        else:
+            return None
+
+    changes = "; ".join(
+            formatted for formatted in [
+                format_change_element(change_element)
+                for change_element in change['changes']
+            ] if formatted
+        )
+    if not changes:
+        return None
+
+    data = dict(
+        author=format_user(author, options, templates),
+        sep=SEP,
+        changes=changes
+    )
+    template = templates['change_template']
+    return template.format(**data)
+
 
 def _gh_username(username, users, gh_auth):
     try:
@@ -510,7 +716,7 @@ def _gh_username(username, users, gh_auth):
         )
 
 
-def format_user(user, options):
+def format_user(user, options, templates):
     """
     Format a Bitbucket user's info into a string containing either 'Anonymous'
     or their name and links to their Bitbucket and GitHub profiles.
@@ -522,19 +728,30 @@ def format_user(user, options):
     # 'reported_by' key, so just be sure to pass in None
     if user is None:
         return "Anonymous"
-    bb_user = "Bitbucket: [{0}](https://bitbucket.org/{0})".format(user['username'])
-    gh_username = _gh_username(user['username'], options.users, options.gh_auth)
+    bb_user = templates['bitbucket_username_template'].strip().format(
+        **{"bb_user": user['username']})
+    gh_username = _gh_username(
+        user['username'], options.users, options.gh_auth)
     if gh_username is not None:
-        gh_user = "GitHub: [{0}](https://github.com/{0})".format(gh_username)
+        gh_user = templates['github_username_template'].strip().format(
+            **{"gh_user": gh_username})
     else:
-        gh_user = "GitHub: Unknown"
-    return (user['display_name'] + " (" + bb_user + ", " + gh_user + ")")
+        gh_user = ""
+
+    data = {
+        "bb_username": user['username'],
+        "gh_username": gh_username or "",
+        "bb_user_badge": bb_user,
+        "gh_user_badge": gh_user,
+        "display_name": user['display_name']
+    }
+    return templates['user_template'].strip().format(**data)
 
 
 def convert_date(bb_date):
     """Convert the date from Bitbucket format to GitHub format."""
-    # '2012-11-26 09:59:39+00:00'
-    m = re.search(r'(\d\d\d\d-\d\d-\d\d) (\d\d:\d\d:\d\d)', bb_date)
+    # '2012-11-26T09:59:39+00:00'
+    m = re.search(r'(\d\d\d\d-\d\d-\d\d)T(\d\d:\d\d:\d\d)', bb_date)
     if m:
         return '{}T{}Z'.format(m.group(1), m.group(2))
 
@@ -615,6 +832,60 @@ def convert_users(content, options):
         return '@' + (options.users.get(matched) or matched)
 
     return MENTION_RE.sub(replace_user, content)
+
+
+class AttachmentsRepo:
+    def __init__(self, repo, options):
+
+        self.git_url = "ssh://git@github.com/{}.wiki.git".format(repo)
+        self.dest = tempfile.mkdtemp()
+
+        if options.git_ssh_identity:
+            os.environ['GIT_SSH_COMMAND'] = 'ssh -i {}'.format(
+                options.git_ssh_identity)
+
+        print("Cloning {} into {}...".format(self.git_url, self.dest))
+        with self._chdir_as(self.dest):
+            self._run_cmd("git", "clone", self.git_url, "wiki_checkout")
+            self.repo_path = os.path.join(self.dest, "wiki_checkout")
+            if not os.path.exists(
+                    os.path.join(
+                        self.repo_path, "imported_issue_attachments")):
+                os.makedirs(
+                    os.path.join(self.repo_path, "imported_issue_attachments"))
+
+    def add_attachment(self, issue_num, filename, content):
+        with self._chdir_as(self.repo_path, "imported_issue_attachments"):
+            if not os.path.exists(str(issue_num)):
+                os.makedirs(str(issue_num))
+            path = os.path.join(str(issue_num), filename)
+            with open(path, "wb") as out_:
+                out_.write(content)
+            self._run_cmd("git", "add", path)
+        return "../wiki/imported_issue_attachments/{}/{}".format(
+            issue_num, filename
+        )
+
+    def commit(self, issue_num):
+        with self._chdir_as(self.repo_path):
+            self._run_cmd(
+                "git", "commit", "-m",
+                "Imported attachments for issue {}".format(issue_num))
+
+    def push(self):
+        with self._chdir_as(self.repo_path):
+            self._run_cmd("git", "push")
+
+    @contextlib.contextmanager
+    def _chdir_as(self, *path_tokens):
+        currdir = os.getcwd()
+        path = os.path.join(*path_tokens)
+        os.chdir(path)
+        yield
+        os.chdir(currdir)
+
+    def _run_cmd(self, *args):
+        subprocess.check_call(args)
 
 
 class GithubMilestones:
