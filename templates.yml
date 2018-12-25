@@ -1,0 +1,43 @@
+github_username_template: |
+  GitHub: [{gh_user}](https://github.com/{gh_user})
+
+bitbucket_username_template: |
+  Bitbucket: [{bb_user}](https://bitbucket.org/{bb_user})
+
+user_template: |
+  {display_name} ({bb_user_badge}, {gh_user_badge})
+
+issue_template: |
+  **[Original report](https://bitbucket.org/{repo}/issue/{id}) by {reporter}.**
+
+  {attachments}{sep}
+
+  {content}
+
+issue_template_skip_user: |
+  **[Original report](https://bitbucket.org/{repo}/issue/{id}) by me.**
+
+  {attachments}{sep}
+
+  {content}
+
+attachments_template: |
+  The original report had attachments: {attach_names}
+
+
+comment_template: |
+  **Original comment by {author}.**
+
+  {sep}
+
+  {content}
+
+comment_template_skip_user: |
+  {content}
+
+change_template: |
+  **Original changes by {author}.**
+
+  {sep}
+
+  {changes}
