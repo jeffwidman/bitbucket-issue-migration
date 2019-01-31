@@ -428,7 +428,7 @@ def convert_issue(
     for key in ['component', 'kind', 'version']:
         v = issue[key]
         if v is not None:
-            if key == 'component':
+            if key == 'component' or key == 'version':
                 v = v['name']
             # Commas are permitted in Bitbucket's components & versions, but
             # they cannot be in GitHub labels, so they must be removed.
