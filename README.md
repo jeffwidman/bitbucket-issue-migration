@@ -15,9 +15,11 @@ dependency if you want to pull login credentials from the system keyring.
 It's probably easiest to install the dependencies using Python 3's built-in
 `venv` tool:
 
-    $ pyvenv ./py3
+    $ python3 -m venv ./py3
     $ source ./py3/bin/activate
     $ pip3 install -r requirements.pip
+    
+On Windows, use `.\py3\Scripts\activate.bat` instead of `source ./py3/bin/activate`
 
 ## Parameters:
 
