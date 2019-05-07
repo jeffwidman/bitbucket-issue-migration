@@ -110,6 +110,9 @@ repo and start over so that the GitHub issue IDs start from 1.
 imposed by GitHub's
 [Import API](https://gist.github.com/jonmagic/5282384165e0f86ef105).
 
+* If your GitHub account uses 2-factor authentication, to access private GitHub repositories the tool instructs you to generate a token.
+You will need permissions `repo` and `write:discussion`.
+
 
 
 Currently maintained by [Jeff Widman](http://www.jeffwidman.com/).
