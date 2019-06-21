@@ -557,7 +557,7 @@ def format_issue_body(issue, attach_names, options):
         content=content,
         attachments=ATTACHMENTS_TEMPLATE.format(attach_names=", ".join(attach_names)) if attach_names else '',
     )
-    skip_user = reporter and reporter['username'] == options.bb_skip
+    skip_user = reporter and reporter['nickname'] == options.bb_skip
     template = ISSUE_TEMPLATE_SKIP_USER if skip_user else ISSUE_TEMPLATE
     return template.format(**data)
 
@@ -573,7 +573,7 @@ def format_comment_body(comment, options):
         sep='-' * 40,
         content=content,
     )
-    skip_user = author and author['username'] == options.bb_skip
+    skip_user = author and author['nickname'] == options.bb_skip
     template = COMMENT_TEMPLATE_SKIP_USER if skip_user else COMMENT_TEMPLATE
     return template.format(**data)
 
@@ -655,8 +655,8 @@ def format_user(user, options):
     # 'reported_by' key, so just be sure to pass in None
     if user is None:
         return "Anonymous"
-    bb_user = "Bitbucket: [{0}](https://bitbucket.org/{0})".format(user['username'])
-    gh_username = _gh_username(user['username'], options.users, options.gh_auth)
+    bb_user = "Bitbucket: [{0}](https://bitbucket.org/{0})".format(user['nickname'])
+    gh_username = _gh_username(user['nickname'], options.users, options.gh_auth)
     if gh_username is not None:
         gh_user = "GitHub: [{0}](https://github.com/{0})".format(gh_username)
     else:
