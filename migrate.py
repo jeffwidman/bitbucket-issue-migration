@@ -85,6 +85,11 @@ def read_arguments():
     )
 
     parser.add_argument(
+        "-d", "--debug", action="store_true",
+        help="Print extra info helpful for debugging",
+    )
+
+    parser.add_argument(
         "-f", "--skip", type=int, default=0,
         help=(
             "The number of Bitbucket issues to skip. Note that if Bitbucket "
@@ -224,10 +229,11 @@ def main(options):
             options, attach_names, gh_milestones,
 
         )
-        gh_comments = [
+        converted_comments = (
             convert_comment(c, options) for c in comments
             if c['content']['raw'] is not None
-        ]
+        )
+        gh_comments = [comment for comment in converted_comments if comment]
 
         if options.mention_changes:
             gh_comments += [
@@ -236,10 +242,12 @@ def main(options):
                 if converted_change
             ]
 
-        if options.dry_run:
-            print("\nIssue: ", gh_issue)
-            print("\nComments: ", gh_comments)
-        else:
+        if options.dry_run or options.debug:
+            print('\nIssue:')
+            pprint.pprint(gh_issue)
+            print("\nComments: ")
+            pprint.pprint(gh_comments)
+        if not options.dry_run:
             push_respo = push_github_issue(
                 gh_issue, gh_comments, options.github_repo,
                 options.gh_auth, headers
@@ -478,9 +486,12 @@ def convert_comment(comment, options):
     Convert an issue comment from Bitbucket schema to GitHub's Issue Import API
     schema.
     """
+    body = format_comment_body(comment, options)
+    if not body.strip():
+        return None
     return {
         'created_at': convert_date(comment['created_on']),
-        'body': format_comment_body(comment, options),
+        'body': body,
     }
 
 def convert_change(change, options):
@@ -489,7 +500,7 @@ def convert_change(change, options):
     schema.
     """
     body = format_change_body(change, options)
-    if not body:
+    if not body.strip():
         return None
     return {
         'created_at': convert_date(change['created_on']),
