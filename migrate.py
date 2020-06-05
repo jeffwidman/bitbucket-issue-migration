@@ -138,6 +138,7 @@ def main(options):
         repo=options.bitbucket_repo)
     options.bb_auth = None
     options.users = dict(user.split('=') for user in options._map_users)
+    explicitly_mapped_users = dict(options.users)
     bb_repo_status = requests.head(bb_url).status_code
     if bb_repo_status == 404:
         raise RuntimeError(
@@ -226,8 +227,8 @@ def main(options):
 
         gh_issue = convert_issue(
             issue, comments, changes,
-            options, attach_names, gh_milestones,
-
+            options, attach_names, gh_milestones, 
+            explicitly_mapped_users
         )
         converted_comments = (
             convert_comment(c, options) for c in comments
@@ -418,7 +419,7 @@ def get_issue_changes(issue_id, bb_url, bb_auth):
 
 
 def convert_issue(
-        issue, comments, changes, options, attach_names, gh_milestones):
+        issue, comments, changes, options, attach_names, gh_milestones, users):
     """
     Convert an issue schema from Bitbucket to GitHub's Issue Import API
     """
@@ -444,6 +445,14 @@ def convert_issue(
             labels.append(v.replace(',', '')[:50])
 
     is_closed = issue['state'] not in ('open', 'new', 'on hold')
+    bb_assignee = nickname = issue['assignee']
+    bb_assignee_nickname = None if bb_assignee is None else bb_assignee['nickname']
+    gh_assignee = None
+    try:
+        gh_assignee = users[bb_assignee_nickname]
+    except KeyError:
+        pass
+        
     out = {
         'title': issue['title'],
         'body': format_issue_body(issue, attach_names, options),
@@ -451,10 +460,7 @@ def convert_issue(
         'created_at': convert_date(issue['created_on']),
         'updated_at': convert_date(issue['updated_on']),
         'labels': labels,
-        ####
-        # GitHub Import API supports assignee, but we can't use it because
-        # our mapping of BB users to GH users isn't 100% accurate
-        # 'assignee': "jonmagic",
+        'assignee': gh_assignee,
     }
 
     if is_closed:
