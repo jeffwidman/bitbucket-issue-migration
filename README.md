@@ -92,6 +92,9 @@ or delete the milestones in GitHub after the migration.
 GitHub links to user who authored the comment/issue. This assumes the user
 reused their Bitbucket username on GitHub.
 
+* Issue assignees are transferred, but only for explicitly mapped users 
+(see the -m switch above).
+
 * Within the body of issues and issue comments, hyperlinks to other issues
 in this Bitbucket repo will be rewritten as `#<ID>`, which GitHub will
 automatically hyperlink to the GitHub issue with that particular ID. This
