@@ -317,9 +317,9 @@ def fill_gaps(issues_iterator, offset):
 
 def get_attachment_names(issue_num, bb_url, bb_auth):
     """Get the names of attachments on this issue."""
-    # Total hack: v1 of the API has no attachment information. Use v2 instead.
+    
     respo = requests.get(
-        "{}/{}/attachments".format(bb_url.replace("1", "2"), issue_num),
+        "{}/{}/attachments".format(bb_url, issue_num),
         auth=bb_auth,
     )
     if respo.status_code == 200:
