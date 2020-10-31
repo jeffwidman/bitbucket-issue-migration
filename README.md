@@ -25,6 +25,8 @@ On Windows, use `.\py3\Scripts\activate.bat` instead of `source ./py3/bin/activa
 
     $ python3 migrate.py -h
     usage: migrate.py [-h] [-bu BITBUCKET_USERNAME] [-n] [-f SKIP] [-m _MAP_USERS]
+                      [--skip-attribution-for BB_SKIP] [--link-changesets]
+                      [--mention-attachments] [--mention-changes]
                       bitbucket_repo github_repo github_username
 
     A tool to migrate issues from Bitbucket to GitHub.
@@ -59,15 +61,20 @@ On Windows, use `.\py3\Scripts\activate.bat` instead of `source ./py3/bin/activa
       -m _MAP_USERS, --map-user _MAP_USERS
                             Override user mapping for usernames, for example
                             `--map-user fk=fkrull`. Can be specified multiple
-                            times.
+                            times. Disable mapping for a user with an empty value,
+                            for example `--map-user fk=`.
 
       --skip-attribution-for BB_SKIP
-                            BitBucket user who doesn't need comments re-
-                            attributed. Useful to skip your own comments, because
-                            you are running this script, and the GitHub comments
-                            will be already under your name.
+                            Your BitBucket username, if you don't want comments
+                            re-attributed. Because you are running this script,
+                            the GitHub comments will already be under your name.
 
       --link-changesets     Link changeset references back to BitBucket.
+
+      --mention-attachments
+                            Mention the names of attachments.
+
+      --mention-changes     Mention changes in status as comments.
 
     $ python3 migrate.py <bitbucket_repo> <github_repo> <github_username>
 

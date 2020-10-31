@@ -101,16 +101,18 @@ def read_arguments():
         "-m", "--map-user", action="append", dest="_map_users", default=[],
         help=(
             "Override user mapping for usernames, for example "
-            "`--map-user fk=fkrull`.  Can be specified multiple times."
+            "`--map-user fk=fkrull`. Can be specified multiple times. "
+            "Disable mapping for a user with an empty value, for example "
+            "`--map-user fk=`."
         ),
     )
 
     parser.add_argument(
         "--skip-attribution-for", dest="bb_skip",
         help=(
-            "BitBucket user who doesn't need comments re-attributed. Useful "
-            "to skip your own comments, because you are running this script, "
-            "and the GitHub comments will be already under your name."
+            "Your BitBucket username, if you don't want comments re-attributed. "
+            "Because you are running this script, the GitHub comments will "
+            "already be under your name."
         ),
     )
 
@@ -630,7 +632,9 @@ def format_change_body(change, options):
 
 def _gh_username(username, users, gh_auth):
     try:
-        return users[username]
+        user = users[username]
+        return user if user else None  # No GH account for this user
+
     except KeyError:
         pass
 
@@ -675,10 +679,10 @@ def format_user(user, options):
     bb_user = "Bitbucket: [{0}](https://bitbucket.org/{0})".format(user['nickname'])
     gh_username = _gh_username(user['nickname'], options.users, options.gh_auth)
     if gh_username is not None:
-        gh_user = "GitHub: [{0}](https://github.com/{0})".format(gh_username)
+        gh_user = ", GitHub: [{0}](https://github.com/{0})".format(gh_username)
     else:
         gh_user = ""
-    return (user['display_name'] + " (" + bb_user + ", " + gh_user + ")")
+    return "{0} ({1}{2})".format(user['display_name'], bb_user, gh_user)
 
 
 def convert_date(bb_date):
