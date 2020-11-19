@@ -18,7 +18,7 @@ It's probably easiest to install the dependencies using Python 3's built-in
     $ python3 -m venv ./py3
     $ source ./py3/bin/activate
     $ pip3 install -r requirements.pip
-    
+
 On Windows, use `.\py3\Scripts\activate.bat` instead of `source ./py3/bin/activate`
 
 ## Parameters:
@@ -69,6 +69,35 @@ On Windows, use `.\py3\Scripts\activate.bat` instead of `source ./py3/bin/activa
 
       --link-changesets     Link changeset references back to BitBucket.
 
+      --mention-attachments
+                            Add attachment file names in comment body.
+
+      --mention-changes
+                            Mention status changes as comments.
+
+      --download-attachments ATTACHMENT_PATH
+                            Download BitBucket issue attachments to the specified
+                            local directory. This directory will be created if
+                            it does not already exist. Attachments will be
+                            mentioned in issue bodies and linked to a path in
+                            the local repo
+                            `/issues/{ATTACHMENT_PATH}/{ISSUE_NUMBER}/filename`
+
+      --download-images IMAGE_PATH
+                            Download BitBucket issue images to the specified
+                            local directory. This directory will be created if
+                            it does not already exist. Attachments will be
+                            mentioned in issue bodies and linked to a path in
+                            the GitHub repo
+                            `/issues/{IMAGE_PATH}/{ISSUE_NUMBER}/filename`
+
+      --map-commits-to-repo COMMIT_REPO
+                            Add, in parentheses, links to the specified repo after
+                            commit SHAs found in issues and comments. E.g.
+                            `123abcd` becomes `123abcd (owner/repo@123abcd)`.
+                            This is useful if your issues are being imported into
+                            a different repo from your source code.
+
     $ python3 migrate.py <bitbucket_repo> <github_repo> <github_username>
 
 ## Example:
@@ -103,6 +132,13 @@ issues, otherwise the imported issues will have a different ID on GitHub than
 on Bitbucket and the links will be incorrect. If you are migrating to a GitHub
 repo with existing issues, just edit the code to offset the imported issue IDs
 by the correct amount.
+
+* If using `--download-attachments` or `--download-images`, clone the Github
+repo, create an `issues` directory in the repo root, and run the script with
+that working directory. Attachments and images will be saved in two
+sub-directories and can be pushed to the repo after the script has completed.
+This will preserve the embedded images and linked attachments in the imported
+issues.
 
 * This script is not idempotent--re-running it will leave the first set of
 imported issues intact, and then create a duplicate set of imported issues after
