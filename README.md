@@ -60,9 +60,6 @@ On Windows, use `.\py3\Scripts\activate.bat` instead of `source ./py3/bin/activa
                             Override user mapping for usernames, for example
                             `--map-user users_mapping_file.txt`. Username mapping should be
                             in the form of `bb_username=gh_username`, each separated by a new line.
-                            Override user mapping for usernames, for example
-                            `--map-user fk=fkrull`. Can be specified multiple
-                            times.
 
       --skip-attribution-for BB_SKIP
                             BitBucket user who doesn't need comments re-
