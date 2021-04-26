@@ -101,7 +101,8 @@ def read_arguments():
         "-m", "--map-user", action="append", dest="_map_users", default=[],
         help=(
             "Override user mapping for usernames, for example "
-            "`--map-user fk=fkrull`.  Can be specified multiple times."
+            "`--map-user users_mapping_file.txt`. Username mapping should be "
+            "in the form of `bb_username=gh_username`, each separated by a new line."
         ),
     )
 
@@ -137,7 +138,9 @@ def main(options):
     bb_url = "https://api.bitbucket.org/2.0/repositories/{repo}/issues".format(
         repo=options.bitbucket_repo)
     options.bb_auth = None
-    options.users = dict(user.split('=') for user in options._map_users)
+    # Reads from a file that contains users' bitbucket-github username mapping
+    users_bb_gh_mapping = [line.rstrip() for line in open(''.join(options._map_users), "r")]
+    options.users = dict(user.split('=') for user in users_bb_gh_mapping)
     explicitly_mapped_users = dict(options.users)
     bb_repo_status = requests.head(bb_url).status_code
     if bb_repo_status == 404:
@@ -227,7 +230,7 @@ def main(options):
 
         gh_issue = convert_issue(
             issue, comments, changes,
-            options, attach_names, gh_milestones, 
+            options, attach_names, gh_milestones,
             explicitly_mapped_users
         )
         converted_comments = (
@@ -452,7 +455,7 @@ def convert_issue(
         gh_assignee = users[bb_assignee_nickname]
     except KeyError:
         pass
-        
+
     out = {
         'title': issue['title'],
         'body': format_issue_body(issue, attach_names, options),
