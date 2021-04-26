@@ -18,7 +18,7 @@ It's probably easiest to install the dependencies using Python 3's built-in
     $ python3 -m venv ./py3
     $ source ./py3/bin/activate
     $ pip3 install -r requirements.pip
-    
+
 On Windows, use `.\py3\Scripts\activate.bat` instead of `source ./py3/bin/activate`
 
 ## Parameters:
@@ -58,6 +58,9 @@ On Windows, use `.\py3\Scripts\activate.bat` instead of `source ./py3/bin/activa
 
       -m _MAP_USERS, --map-user _MAP_USERS
                             Override user mapping for usernames, for example
+                            `--map-user users_mapping_file.txt`. Username mapping should be
+                            in the form of `bb_username=gh_username`, each separated by a new line.
+                            Override user mapping for usernames, for example
                             `--map-user fk=fkrull`. Can be specified multiple
                             times.
 
@@ -92,7 +95,7 @@ or delete the milestones in GitHub after the migration.
 GitHub links to user who authored the comment/issue. This assumes the user
 reused their Bitbucket username on GitHub.
 
-* Issue assignees are transferred, but only for explicitly mapped users 
+* Issue assignees are transferred, but only for explicitly mapped users
 (see the -m switch above).
 
 * Within the body of issues and issue comments, hyperlinks to other issues
