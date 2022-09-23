@@ -22,7 +22,7 @@ import re
 import sys
 import time
 import warnings
-
+import os
 import getpass
 import requests
 
@@ -139,7 +139,12 @@ def main(options):
         repo=options.bitbucket_repo)
     options.bb_auth = None
     # Reads from a file that contains users' bitbucket-github username mapping
-    users_bb_gh_mapping = [line.rstrip() for line in open(''.join(options._map_users), "r")]
+    bb_gh_path = ''.join(options._map_users)
+    if bb_gh_path != '':
+        users_bb_gh_mapping = [line.rstrip() for line in open(bb_gh_path, "r")]
+    else:
+        users_bb_gh_mapping = []
+
     options.users = dict(user.split('=') for user in users_bb_gh_mapping)
     explicitly_mapped_users = dict(options.users)
     bb_repo_status = requests.head(bb_url).status_code
