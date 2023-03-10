@@ -602,6 +602,8 @@ def format_change_body(change, options):
     author = change['user']
 
     def format_change_element(change_element):
+        if change_element == 'content':
+            return 'edited description'
         old = change['changes'][change_element]['old']
         new = change['changes'][change_element]['new']
         if old and new:
@@ -613,7 +615,7 @@ def format_change_body(change, options):
         else:
             return None
 
-    changes = "; ".join(
+    changes = "\n* ".join(
             formatted for formatted in [
                 format_change_element(change_element)
                 for change_element in change['changes']
@@ -625,7 +627,7 @@ def format_change_body(change, options):
     data = dict(
         author=format_user(author, options),
         sep='-' * 40,
-        changes=changes
+        changes='* '+changes
     )
     template = CHANGE_TEMPLATE
     return template.format(**data)
