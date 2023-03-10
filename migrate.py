@@ -560,6 +560,10 @@ CHANGE_TEMPLATE = """\
 {changes}
 """
 
+CHANGE_TEMPLATE_SKIP_USER = """\
+{changes}
+"""
+
 
 def format_issue_body(issue, attach_names, options):
     content = issue['content']['raw']
@@ -627,7 +631,8 @@ def format_change_body(change, options):
         sep='-' * 40,
         changes=changes
     )
-    template = CHANGE_TEMPLATE
+    skip_user = author and author['nickname'] == options.bb_skip
+    template = CHANGE_TEMPLATE_SKIP_USER if skip_user else CHANGE_TEMPLATE
     return template.format(**data)
 
 
