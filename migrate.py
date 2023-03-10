@@ -520,7 +520,7 @@ def convert_change(change, options):
 SEP = "-" * 40
 
 ISSUE_TEMPLATE = """\
-**[Original report](https://bitbucket.org/{repo}/issue/{id}) by {reporter}.**
+**[Original report](https://bitbucket.org/{repo}/issues/{id}) by {reporter}.**
 
 {attachments}{sep}
 
@@ -528,7 +528,7 @@ ISSUE_TEMPLATE = """\
 """
 
 ISSUE_TEMPLATE_SKIP_USER = """\
-**[Original report](https://bitbucket.org/{repo}/issue/{id}) by me.**
+**[Original report](https://bitbucket.org/{repo}/issues/{id}) by me.**
 
 {attachments}{sep}
 
@@ -756,7 +756,7 @@ def convert_links(content, options):
     Convert absolute links to other issues related to this repository to
     relative links ("#<id>").
     """
-    pattern = r'https://bitbucket.org/{repo}/issue/(\d+)'.format(
+    pattern = r'https://bitbucket.org/{repo}/issues/(\d+)'.format(
         repo=options.bitbucket_repo)
     return re.sub(pattern, r'#\1', content)
 
