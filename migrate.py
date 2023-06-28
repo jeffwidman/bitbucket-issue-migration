@@ -20,6 +20,7 @@ import argparse
 import pprint
 import re
 import sys
+import pathlib
 import time
 import warnings
 
@@ -130,11 +131,40 @@ def read_arguments():
         help="Mention changes in status as comments.",
     )
 
+    parser.add_argument(
+        "--download-attachments", dest="attachment_path",
+        help=(
+            "Download BitBucket issue attachments to the specified local directory. "
+            "This directory will be created if it does not already exist. "
+            "Attachments will be saved in subdirectories named with the issue number."
+        ),
+    )
+
+    parser.add_argument(
+        "--download-images", dest="image_path",
+        help=(
+            "Download BitBucket issue images to the specified local directory. "
+            "This directory will be created if it does not already exist. "
+            "Images will be saved in subdirectories named with the issue number."
+        ),
+    )
+
+    parser.add_argument(
+        "--map-commits-to-repo", dest="map_commits_repo",
+        help=(
+            "Add the specified repo to commit SHAs found in issues and comments. "
+            "E.g: (owner/repo@123abcd). "
+        ),
+    )
+
     return parser.parse_args()
 
 
 def main(options):
     """Main entry point for the script."""
+
+    print(options)
+
     bb_url = "https://api.bitbucket.org/2.0/repositories/{repo}/issues".format(
         repo=options.bitbucket_repo)
     options.bb_auth = None
@@ -159,7 +189,9 @@ def main(options):
                 username.
                 """
             )
-        kr_pass_bb = keyring.get_password('Bitbucket', options.bitbucket_username)
+        kr_pass_bb = keyring.get_password(
+            'Bitbucket',
+            options.bitbucket_username)
         bitbucket_password = kr_pass_bb or getpass.getpass(
             "Please enter your Bitbucket password.\n"
             "Note: If your Bitbucket account has two-factor authentication "
@@ -210,6 +242,26 @@ def main(options):
     headers = {'Accept': 'application/vnd.github.golden-comet-preview+json'}
     gh_milestones = GithubMilestones(options.github_repo, options.gh_auth, headers)
 
+    # Create attachment directory if needed, and define download flag
+    if options.attachment_path is not None:
+        pathlib.Path(options.attachment_path).mkdir(parents=True, exist_ok=True)
+        options.download_attachments = True
+    else:
+        options.download_attachments = False
+
+    # Create image directory if needed, and define download flag
+    if options.image_path is not None:
+        pathlib.Path(options.image_path).mkdir(parents=True, exist_ok=True)
+        options.download_images = True
+    else:
+        options.download_images = False
+
+    # Set repo mapping flag
+    if options.map_commits_repo is not None:
+        options.map_commits = True
+    else:
+        options.map_commits = False
+
     print("getting issues from bitbucket")
     issues_iterator = get_issues(bb_url, options.skip, options.bb_auth)
 
@@ -222,11 +274,33 @@ def main(options):
         else:
             comments = get_issue_comments(issue['id'], bb_url, options.bb_auth)
             changes = get_issue_changes(issue['id'], bb_url, options.bb_auth)
+            print(comments)
 
-        if options.mention_attachments:
-            attach_names = get_attachment_names(issue['id'], bb_url, options.bb_auth)
-        else:
+        if options.mention_attachments or options.download_attachments:
+            attachments_json = get_attachments(issue['id'], bb_url, options.bb_auth)
             attach_names = []
+            if options.mention_attachments:
+                attach_names = [val['name'] for val in attachments_json['values']]
+            if options.download_attachments:
+                download_attachments(
+                    issue['id'],
+                    attachments_json,
+                    options.attachment_path,
+                    options.bb_auth,
+                )
+                attach_names = get_attachment_links(
+                    issue['id'],
+                    attachments_json,
+                    options
+                )
+
+        if options.download_images:
+            download_images(
+                issue,
+                comments,
+                options.image_path,
+                options.bb_auth,
+            )
 
         gh_issue = convert_issue(
             issue, comments, changes,
@@ -234,7 +308,7 @@ def main(options):
             explicitly_mapped_users
         )
         converted_comments = (
-            convert_comment(c, options) for c in comments
+            convert_comment(c, options, issue['id']) for c in comments
             if c['content']['raw'] is not None
         )
         gh_comments = [comment for comment in converted_comments if comment]
@@ -283,7 +357,7 @@ class DummyIssue(dict):
     def __init__(self, num):
         self.update(
             id=num,
-            #...
+            # ...
         )
 
 
@@ -318,18 +392,62 @@ def fill_gaps(issues_iterator, offset):
         yield issue
 
 
-def get_attachment_names(issue_num, bb_url, bb_auth):
-    """Get the names of attachments on this issue."""
-    # Total hack: v1 of the API has no attachment information. Use v2 instead.
+def get_attachments(issue_num, bb_url, bb_auth):
+    """Get the JSON describing the attachments on this issue."""
+
     respo = requests.get(
-        "{}/{}/attachments".format(bb_url.replace("1", "2"), issue_num),
+        "{}/{}/attachments".format(bb_url, issue_num),
         auth=bb_auth,
     )
     if respo.status_code == 200:
-        result = respo.json()
-        return [val['name'] for val in result['values']]
+        return respo.json()
     else:
         return []
+
+
+def download_attachments(issue_num, attachments, path, bb_auth):
+    """Download files attached to this issue."""
+
+    for attachment in attachments['values']:
+        for url in attachment['links']['self']['href']:
+            download_file(
+                url=url,
+                auth=bb_auth,
+                dir='{}/{}'.format(path, issue_num),
+                name=url.split('/')[-1].replace('%20', '_')
+            )
+            break
+
+def download_images(issue, comments, path, bb_auth):
+    """Download images attached to this issue."""
+
+    issue_num = issue['id']
+    for body_match in IMAGE_RE.finditer(issue['content']['raw']):
+        url = body_match.group(2)
+        download_file(
+            url=url,
+            auth=bb_auth,
+            dir='{}/{}'.format(path, issue_num),
+            name=url.split('/')[-1].replace('%20', '_')
+        )
+    for comment in comments:
+        content = comment['content']['raw']
+        if content is not None:
+            for comment_match in IMAGE_RE.finditer(content):
+                url = comment_match.group(2)
+                download_file(
+                    url=url,
+                    auth=bb_auth,
+                    dir='{}/{}'.format(path, issue_num),
+                    name=url.split('/')[-1].replace('%20', '_')
+                )
+
+
+def download_file(url, auth, dir, name):
+    respo = requests.get(url, auth=auth, allow_redirects=True)
+    if respo.status_code == 200:
+        pathlib.Path(dir).mkdir(parents=True, exist_ok=True)
+        open("{}/{}".format(dir, name), 'wb').write(respo.content)
 
 
 def get_issues(bb_url, offset, bb_auth):
@@ -490,18 +608,19 @@ def convert_issue(
     return out
 
 
-def convert_comment(comment, options):
+def convert_comment(comment, options, issue_num):
     """
     Convert an issue comment from Bitbucket schema to GitHub's Issue Import API
     schema.
     """
-    body = format_comment_body(comment, options)
+    body = format_comment_body(comment, options, issue_num)
     if not body.strip():
         return None
     return {
         'created_at': convert_date(comment['created_on']),
         'body': body,
     }
+
 
 def convert_change(change, options):
     """
@@ -536,7 +655,8 @@ ISSUE_TEMPLATE_SKIP_USER = """\
 """
 
 ATTACHMENTS_TEMPLATE = """\
-The original report had attachments: {attach_names}
+The original report had attachments:
+{attach_names}
 
 """
 
@@ -571,6 +691,8 @@ def format_issue_body(issue, attach_names, options):
     content = convert_creole_braces(content)
     content = convert_links(content, options)
     content = convert_users(content, options)
+    content = convert_images(content, options, issue['id'])
+    content = convert_commit_refs(content, options)
     reporter = issue.get('reporter')
     data = dict(
         # anonymous issues are missing 'reported_by' key
@@ -579,18 +701,21 @@ def format_issue_body(issue, attach_names, options):
         repo=options.bitbucket_repo,
         id=issue['id'],
         content=content,
-        attachments=ATTACHMENTS_TEMPLATE.format(attach_names=", ".join(attach_names)) if attach_names else '',
+        attachments=ATTACHMENTS_TEMPLATE.format(attach_names="\n".join(attach_names)) if attach_names else '',
     )
     skip_user = reporter and reporter['nickname'] == options.bb_skip
     template = ISSUE_TEMPLATE_SKIP_USER if skip_user else ISSUE_TEMPLATE
     return template.format(**data)
 
-def format_comment_body(comment, options):
+
+def format_comment_body(comment, options, issue_num):
     content = comment['content']['raw']
     content = convert_changesets(content, options)
     content = convert_creole_braces(content)
     content = convert_links(content, options)
     content = convert_users(content, options)
+    content = convert_images(content, options, issue_num)
+    content = convert_commit_refs(content, options)
     author = comment['user']
     data = dict(
         author=format_user(author, options),
@@ -726,6 +851,7 @@ def convert_changesets(content, options):
         content = "\n".join(filtered_lines)
     return content
 
+
 def convert_creole_braces(content):
     """
     Convert Creole code blocks to Markdown formatting.
@@ -775,6 +901,65 @@ def convert_users(content, options):
         return '@' + (options.users.get(matched) or matched)
 
     return MENTION_RE.sub(replace_user, content)
+
+
+IMAGE_RE = re.compile(r'!\[(.*)\]\((.*)\)')
+
+
+def convert_images(content, options, issue_number):
+    """
+    Update image paths to point to Github repo
+    """
+    def replace_image(match):
+        image_name = match.group(1)
+        image_url = match.group(2)
+        new_url = 'https://github.com/{repo}/raw/master/issues/{images}/{issue}/{file}'.format(
+            repo=options.github_repo,
+            images=options.image_path,
+            issue=issue_number,
+            file=image_url.split('/')[-1]).replace('%20', '_')
+        return '![{}]({})'.format(image_name, new_url)
+
+    if options.download_images:
+        return IMAGE_RE.sub(replace_image, content)
+    else:
+        return content
+
+
+COMMIT_SHA_RE = re.compile(r'\s([0-9A-Fa-f]{7,40})\b')
+
+
+def convert_commit_refs(content, options):
+    """
+    Add explicit repo to commit references
+    """
+    def replace_commit_ref(match):
+        return '{original} ({repo}@{sha})'.format(
+            original=match.group(0),
+            repo=options.map_commits_repo,
+            sha=match.group(1))
+
+    if options.map_commits:
+        return COMMIT_SHA_RE.sub(replace_commit_ref, content)
+    else:
+        return content
+
+
+def get_attachment_links(issue_num, attachments, options):
+    """Generate links to attachments in Github repo"""
+
+    links = []
+    for attachment in attachments['values']:
+        name = attachment['name']
+        for url in attachment['links']['self']['href']:
+            new_url = 'https://github.com/{repo}/raw/master/issues/{attachments}/{issue}/{file}'.format(
+                repo=options.github_repo,
+                attachments=options.attachment_path,
+                issue=issue_num,
+                file=url.split('/')[-1]).replace('%20', '_')
+            links.append('[{}]({})'.format(name, new_url))
+            break
+    return links
 
 
 class GithubMilestones:
